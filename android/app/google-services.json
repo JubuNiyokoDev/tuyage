@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "770228086066",
+    "firebase_url": "https://tuyage-barundi-default-rtdb.firebaseio.com",
+    "project_id": "tuyage-barundi",
+    "storage_bucket": "tuyage-barundi.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:770228086066:android:aaf3c5294cdff630c0232b",
+        "android_client_info": {
+          "package_name": "com.example.tuyage"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCyjaeU31N-v3kYZ8ZwTreX41gkXH3UA-g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,63 @@
+{
+    "flutter": {
+        "platforms": {
+            "android": {
+                "default": {
+                    "projectId": "tuyage-barundi",
+                    "appId": "1:770228086066:android:921d839730f50ac3c0232b",
+                    "fileOutput": "android/app/google-services.json"
+                }
+            },
+            "dart": {
+                "lib/firebase_options.dart": {
+                    "projectId": "tuyage-barundi",
+                    "configurations": {
+                        "android": "1:770228086066:android:921d839730f50ac3c0232b",
+                        "web": "1:770228086066:web:ebf0a47f20631337c0232b",
+                        "windows": "1:770228086066:web:7bb89b2b494a38ffc0232b"
+                    }
+                }
+            }
+        }
+    },
+    "functions": [
+        {
+            "source": "functions",
+            "codebase": "default",
+            "ignore": [
+                "node_modules",
+                ".git",
+                "firebase-debug.log",
+                "firebase-debug.*.log",
+                "*.local"
+            ],
+            "predeploy": [
+                "npm --prefix \"%RESOURCE_DIR%\" run lint"
+            ]
+        }
+    ],
+    "emulators": {
+        "functions": {
+            "port": 5000
+        },
+        "ui": {
+            "enabled": true
+        },
+        "singleProjectMode": true,
+        "auth": {
+            "port": 5000
+        },
+        "firestore": {
+            "port": 8000
+        },
+        "database": {
+            "port": 3000
+        },
+        "hosting": {
+            "port": 8080
+        },
+        "storage": {
+            "port": 8000
+        }
+    }
+}
