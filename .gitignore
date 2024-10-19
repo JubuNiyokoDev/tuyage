@@ -43,3 +43,26 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Flutter related
+build/
+.flutter/
+.dart_tool/
+.packages
+.pub/
+.pub-cache/
+
+# IntelliJ related (optional, only if you're using IntelliJ/Android Studio)
+.idea/
+*.iml
+
+# VS Code related (optional, only if you're using VS Code)
+.vscode/
+
+# macOS related (optional, only if you're developing on a macOS)
+.DS_Store
+
+# Windows related (optional, only if you're developing on Windows)
+Thumbs.db
+
+node_modules/
