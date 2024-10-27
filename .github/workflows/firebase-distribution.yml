@@ -3,7 +3,7 @@ name: Firebase App Distribution
 on:
   push:
     branches:
-      - master  # Utiliser la branche master
+      - master  
 
 jobs:
   build:
