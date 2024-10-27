@@ -3,7 +3,7 @@ name: Firebase App Distribution
 on:
   push:
     branches:
-      - main  # Change to the branch you want to trigger the build on
+      - master   # Change to the branch you want to trigger the build on
 
 jobs:
   build:
