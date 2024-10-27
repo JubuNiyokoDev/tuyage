@@ -24,11 +24,16 @@ jobs:
         with:
           flutter-version: '3.24.4'  # Assurez-vous que cette version est correcte
 
+      - name: Clean Build
+        run: flutter clean
+
       - name: Install dependencies
         run: flutter pub get
 
+      
+
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --stacktrace
 
       - name: Install Firebase CLI
         run: curl -sL https://firebase.tools | bash
