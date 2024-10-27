@@ -33,7 +33,7 @@ jobs:
       
 
       - name: Build APK
-        run: flutter build apk --release --verbose
+        run: flutter build apk --release 
 
       - name: Install Firebase CLI
         run: curl -sL https://firebase.tools | bash
