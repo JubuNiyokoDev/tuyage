@@ -51,7 +51,7 @@ class MessageModel {
       type: (map['type'] as String).toEnum(),
       timeSent: DateTime.fromMillisecondsSinceEpoch(map['timeSent']),
       messageId: map['messageId'] ?? '',
-      status: _getStatusFromString(map['status']),
+      status: _getStatusFromString(map['status'] ?? 'pending'),
       repliedMessage: map['repliedMessage'] ?? '',
       repliedTo: map['repliedTo'] ?? '',
       repliedMessageType: (map['repliedMessageType'] as String).toEnum(),

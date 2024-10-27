@@ -4,7 +4,6 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:hive/hive.dart';
 import 'package:tuyage/common/enum/message_status.dart';
 import 'package:tuyage/common/helper/show_alert_dialog.dart';
 import 'package:tuyage/common/models/group.dart';
@@ -33,6 +32,10 @@ class ChatRepository {
   ChatRepository({required this.firestore, required this.auth});
 
   StreamSubscription<List<ConnectivityResult>>? connectivitySubscription;
+  final StreamController<List<MessageModel>> _messageController =
+      StreamController<List<MessageModel>>.broadcast();
+
+  Stream<List<MessageModel>> get messagesStream => _messageController.stream;
 
   void monitorUserConnectivity(WidgetRef ref, BuildContext context) {
     connectivitySubscription =
@@ -40,28 +43,34 @@ class ChatRepository {
       final uid = auth.currentUser?.uid;
       final authController = ref.read(authControllerProvider);
 
-      bool currentConnection = result == ConnectivityResult.mobile ||
-          result == ConnectivityResult.wifi;
-
-      if (currentConnection != isConnected) {
-        isConnected = currentConnection;
-
-        if (!isConnected) {
-          print("L'utilisateur est déconnecté");
-          if (uid != null) {
-            await authController.updateUserPresenceToOffline(uid, context);
-          }
+      for (var r in result) {
+        if (r == ConnectivityResult.mobile) {
+          isConnected = true;
+          print('Connected via Mobile');
+        } else if (r == ConnectivityResult.wifi) {
+          print('Connected via WiFi');
+          isConnected = true;
         } else {
-          print("L'utilisateur est connecté");
-          if (uid != null) {
-            await updateUserActiveStatus(true);
-            await updateUserLastSeen(uid);
+          print('is not Connected via WiFi or via Mobile');
+          isConnected = false;
+        }
+      }
 
-            // Appeler la synchronisation des messages ici
-            var pendingMessages = await getLocalMessages(auth.currentUser!.uid);
-            if (pendingMessages.isNotEmpty) {
-              await syncAllMessages();
-            }
+      if (!isConnected) {
+        print("L'utilisateur est déconnecté");
+        if (uid != null) {
+          await authController.updateUserPresenceToOffline(uid, context);
+        }
+      } else {
+        print("L'utilisateur est connecté");
+        if (uid != null) {
+          await updateUserActiveStatus(true);
+          await updateUserLastSeen(uid);
+
+          // Appeler la synchronisation des messages ici
+          var pendingMessages = await getLocalMessages(auth.currentUser!.uid);
+          if (pendingMessages.isNotEmpty) {
+            await syncAllMessages();
           }
         }
       }
@@ -108,7 +117,7 @@ class ChatRepository {
         .collection('messages')
         .where(
           'status',
-          isEqualTo: _getStringFromStatus(MessageStatus.pending),
+          isEqualTo: _getStringFromStatus(MessageStatus.sent),
         )
         .get();
 
@@ -116,12 +125,12 @@ class ChatRepository {
       final messageId = doc.id;
       await updateMessageStatus(
         messageId: messageId,
-        status: MessageStatus.delivered,
+        status: MessageStatus.sent,
         receiverId: receiverId,
       );
       await updateMessageStatusInSQLite(
         messageId,
-        MessageStatus.delivered,
+        MessageStatus.sent,
       );
     }
   }
@@ -146,79 +155,97 @@ class ChatRepository {
     }
   }
 
-  Stream<List<MessageModel>> getAllOneToOneMessage(String receiverId) async* {
-    final isConnected = await isConnectedToNetwork();
+  Stream<List<MessageModel>> getAllOneToOneMessage(String receiverId) {
+    // Émet immédiatement les messages locaux
+    getLocalMessages(receiverId).then((localMessages) {
+      if (localMessages.isNotEmpty) {
+        _messageController.add(localMessages); // Émettre les messages locaux
+      } else {
+        print('Aucun message local pour le receiverId : $receiverId');
+        _messageController
+            .add([]); // Émet une liste vide pour éviter le chargement infini
+      }
+    });
 
-    if (isConnected) {
-      print('Récupération des messages depuis Firestore :');
-      yield* firestore
-          .collection('users')
-          .doc(auth.currentUser!.uid)
-          .collection('chats')
-          .doc(receiverId)
-          .collection('messages')
-          .orderBy('timeSent', descending: false)
-          .snapshots()
-          .map((snapshot) {
-        // Vérifier s'il y a des documents dans la collection
-        if (snapshot.docs.isEmpty) {
-          print('Aucun message trouvé pour ce destinataire.');
-          return <MessageModel>[]; // Retourner une liste vide si aucun message
-        }
+    // Vérification de la connexion à Internet
+    isConnectedToNetwork().then((isConnected) {
+      if (!isConnected) {
+        print('Pas de connexion à Internet. Émission des messages locaux.');
+        // On ne sort pas ici, on continue d'écouter les changements locaux
+      } else {
+        // Écoute des nouveaux messages depuis Firestore
+        firestore
+            .collection('users')
+            .doc(auth.currentUser!.uid)
+            .collection('chats')
+            .doc(receiverId)
+            .collection('messages')
+            .orderBy('timeSent', descending: false)
+            .snapshots()
+            .listen((snapshot) async {
+          if (snapshot.docs.isNotEmpty) {
+            final messages = snapshot.docs.map((doc) {
+              var data = doc.data();
+              return MessageModel.fromMap({
+                'messageId': doc.id,
+                'senderId': data['senderId'],
+                'receiverId': data['receiverId'],
+                'textMessage': data['textMessage'],
+                'type': data['type'],
+                'timeSent': data['timeSent'],
+                'status': data['status'],
+                'repliedMessage': data['repliedMessage'] ?? '',
+                'repliedTo': data['repliedTo'] ?? '',
+                'repliedMessageType': data['repliedMessageType'] ?? '',
+              });
+            }).toList();
 
-        final messages = snapshot.docs.map((doc) {
-          var data = doc.data();
+            // Synchronisez avec SQLite
+            await _syncMessagesWithSQLite(messages);
 
-          print('Message ID: ${doc.id}, Status: ${data['status']}');
+            // Émettre les messages synchronisés
+            print('Messages Firestore ajoutés dans le StreamController.');
+            _messageController.add(messages);
+          } else {
+            print('Aucun nouveau message depuis Firestore pour $receiverId');
+            // Ici, on pourrait émettre des messages locaux si souhaité
+          }
+        }, onError: (error) {
+          print('Erreur de synchronisation Firestore : $error');
+          _messageController
+              .addError(error); // Capturez les erreurs dans le StreamController
+        });
+      }
+    });
 
-          return MessageModel.fromMap({
-            'messageId': doc.id,
-            'senderId': data['senderId'],
-            'receiverId': data['receiverId'],
-            'textMessage': data['textMessage'],
-            'type': data['type'],
-            'timeSent': data['timeSent'],
-            'status': MessageStatus.values.firstWhere(
-                (e) => e.toString() == data['status'],
-                orElse: () => MessageStatus.pending),
-            'repliedMessage': data['repliedMessage'] ?? '',
-            'repliedTo': data['repliedTo'] ?? '',
-            'repliedMessageType': data['repliedMessageType'] ?? '',
-          });
-        }).toList();
-
-        _syncMessagesWithSQLite(
-            messages); // Appel de la fonction pour synchroniser avec SQLite
-
-        return messages;
-      }).handleError((error) {
-        print(
-            'Erreur lors de la récupération des messages depuis Firestore: $error');
-      });
-    } else {
-      print('Récupération des messages depuis SQLITE :');
-      final localMessages = await getLocalMessages(receiverId);
-      yield localMessages;
-    }
+    return _messageController.stream; // Retourne le stream
   }
 
 // Fonction pour synchroniser les messages avec SQLite
   Future<void> _syncMessagesWithSQLite(List<MessageModel> messages) async {
+    if (messages.isEmpty) return; // Vérifier s'il y a des messages
+
+    // Utiliser le receiverId du premier message
+    print('Synchronisation des messages avec SQLite en cours...');
+
+    final String receiverId = messages[0].receiverId;
+
     for (var message in messages) {
-      // Vérifier si le message existe localement
       final existsLocally = await messageExistsLocally(message.messageId);
 
       if (!existsLocally) {
-        // Si le message n'existe pas, l'insérer dans SQLite
         await saveMessageLocally(message);
         print('Message sauvegardé dans SQLite : ${message.messageId}');
       } else {
-        // Si le message existe, vérifier et mettre à jour son statut si nécessaire
         await updateMessageStatusInSQLite(message.messageId, message.status);
         print(
             'Statut du message mis à jour dans SQLite : ${message.messageId}');
       }
     }
+
+    // Émettre la liste mise à jour des messages après la synchronisation
+    final updatedMessages = await getLocalMessages(receiverId);
+    _messageController.add(updatedMessages);
   }
 
   Stream<List<MessageModel>> getAllOneToOneGroupMessages(String groupId) {
@@ -409,8 +436,25 @@ class ChatRepository {
     }
   }
 
+  Future<List<MessageModel>> getPendingMessagesFromSQLite() async {
+    // Récupérer les messages dont le statut est 'pending'
+    final db = await DatabaseHelper().database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'messages',
+      where: 'status = ?',
+      whereArgs: ['pending'],
+    );
+
+    return List.generate(maps.length, (i) {
+      return MessageModel.fromMap(maps[i]);
+    });
+  }
+
   Future<void> syncMessages(String receiverId) async {
     try {
+      final lastSyncTime = await DatabaseHelper().getLastSyncTime(receiverId) ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+
       // Récupération des messages de Firestore
       final firestoreMessagesSnapshot = await firestore
           .collection('users')
@@ -418,6 +462,7 @@ class ChatRepository {
           .collection('chats')
           .doc(receiverId)
           .collection('messages')
+          .where('timeSent', isGreaterThan: lastSyncTime.millisecondsSinceEpoch)
           .get();
 
       if (firestoreMessagesSnapshot.docs.isEmpty) {
@@ -435,29 +480,105 @@ class ChatRepository {
         print('Aucun message trouvé localement.');
       }
 
+      // Récupération des données de l'utilisateur actuel (expéditeur)
+      final user = FirebaseAuth.instance.currentUser;
+      final senderData = await getSenderData(user!.uid);
+
+      // Récupération des données du destinataire
+      final receiverData = await getReceiverData(receiverId);
+
       // Synchronisation des messages
       for (var localMessage in localMessages) {
         if (localMessage.receiverId == receiverId) {
           // Si le message n'existe pas dans Firestore, l'envoyer
           if (!firestoreMessageIds.contains(localMessage.messageId)) {
+            // Sauvegarde du message dans Firestore
             await saveToMessageCollection(
               receiverId: receiverId,
               textMessage: localMessage.textMessage,
               timeSent: localMessage.timeSent,
               textMessageId: localMessage.messageId,
-              senderUsername: localMessage.senderId,
-              receiverUsername: localMessage.receiverId,
+              senderUsername: senderData.username,
+              receiverUsername: receiverData.username,
               messageType: localMessage.type,
               messageReply: null,
               isGroupChat: false,
             );
+
+            // Vérifier si le message a été correctement sauvegardé dans Firestore
+            final messageRef = firestore
+                .collection('users')
+                .doc(auth.currentUser!.uid)
+                .collection('chats')
+                .doc(receiverId)
+                .collection('messages')
+                .doc(localMessage.messageId);
+
+            if (await messageRef.get().then((doc) => doc.exists)) {
+              // Mise à jour du statut du message dans SQLite et Firestore
+              await updateMessageStatusInSQLite(
+                  localMessage.messageId, MessageStatus.sent);
+              await updateMessageStatus(
+                messageId: localMessage.messageId,
+                status: MessageStatus.sent,
+                receiverId: receiverId,
+              );
+
+              // Mettre à jour le dernier message pour l'expéditeur et le destinataire
+              await saveAsLastMessage(
+                senderUserData: senderData,
+                receiverUserData: receiverData,
+                lastMessage: localMessage.textMessage,
+                timeSent: localMessage.timeSent,
+                receiverId: receiverId,
+                isGroupChat: false, // Adapte selon le contexte
+              );
+            } else {
+              print(
+                  'Erreur lors de l\'enregistrement du message dans Firestore');
+            }
           }
         }
       }
 
+      await DatabaseHelper().updateLastSyncTime(receiverId, DateTime.now());
+
       print("Synchronisation des messages terminée.");
     } catch (e) {
       print('Erreur lors de la synchronisation des messages : $e');
+    }
+  }
+
+  Future<UserModel> getSenderData(String senderId) async {
+    try {
+      final senderDoc = await firestore.collection('users').doc(senderId).get();
+
+      if (senderDoc.exists) {
+        // Assure-toi que UserData a une méthode fromMap pour construire un objet à partir d'un Map
+        return UserModel.fromMap(senderDoc.data()!);
+      } else {
+        throw Exception('L\'utilisateur avec l\'ID $senderId n\'existe pas');
+      }
+    } catch (e) {
+      print('Erreur lors de la récupération des données de l\'expéditeur : $e');
+      rethrow; // Relancer l'erreur pour gérer ailleurs si nécessaire
+    }
+  }
+
+  Future<UserModel> getReceiverData(String receiverId) async {
+    try {
+      final receiverSnapshot =
+          await firestore.collection('users').doc(receiverId).get();
+      if (receiverSnapshot.exists) {
+        // Extraire les données de l'utilisateur du snapshot
+        return UserModel.fromMap(
+            receiverSnapshot.data()!); // Assumes UserData has a fromMap method
+      } else {
+        throw Exception('Utilisateur non trouvé');
+      }
+    } catch (e) {
+      print('Erreur lors de la récupération des données du destinataire : $e');
+      rethrow;
     }
   }
 
@@ -473,7 +594,7 @@ class ChatRepository {
     return result.isNotEmpty;
   }
 
-  void sendTextMessage({
+  Future<void> sendTextMessage({
     required BuildContext context,
     required String textMessage,
     required String receiverId,
@@ -487,112 +608,185 @@ class ChatRepository {
 
       // Récupérer les données du destinataire si ce n'est pas un chat de groupe
       if (!isGroupChat) {
-        if (receiverId.isEmpty) {
-          print("Le receiverId est vide.");
-          return;
-        }
-        print("Le receiverId n'est pas vide.");
-        final receiverDataMap =
-            await firestore.collection('users').doc(receiverId).get();
-        // Vérifie que les données existent avant de créer l'utilisateur
-        if (receiverDataMap.exists) {
-          receiverData = UserModel.fromMap(receiverDataMap.data()!);
-        } else {
-          // Gestion d'erreur si l'utilisateur n'existe pas
-          print("L'utilisateur avec l'ID $receiverId n'existe pas.");
-          return;
-        }
+        receiverData = await _getReceiverData(receiverId);
+        if (receiverData == null)
+          return; // Sortir si l'utilisateur n'existe pas
       }
 
       // Génération de l'ID du message unique
       final textMessageId = const Uuid().v1();
 
-      print('Sender ID: ${senderData.uid}');
-      print('Receiver ID: $receiverId');
-      print('Text Message: $textMessage');
-      print('Replied Message: ${messageReply?.message}');
-      print(
-          'Replied To: ${messageReply == null ? '' : messageReply.isMe ? (senderData.username ?? 'Utilisateur inconnu') : (receiverData?.username ?? 'Utilisateur inconnu')}');
-      print('Receiver Username: ${receiverData?.username}');
-
       // Création du modèle de message local
-      final localMessage = MessageModel(
-        senderId: senderData.uid,
-        receiverId: receiverId,
-        textMessage: textMessage,
-        type: myMessageType.MessageType.text,
-        timeSent: timeSent,
-        messageId: textMessageId,
-        status: MessageStatus.pending,
-        repliedMessage: messageReply?.message ?? '',
-        repliedTo: messageReply == null
-            ? ''
-            : messageReply.isMe
-                ? senderData.username
-                : receiverData?.username ?? '',
-        repliedMessageType:
-            messageReply?.messageType ?? myMessageType.MessageType.text,
+      final localMessage = _createLocalMessage(
+        textMessageId,
+        senderData,
+        receiverId,
+        textMessage,
+        timeSent,
+        messageReply,
+        receiverData, // Passer receiverData ici
       );
 
-      // Vérifier si le message n'a pas déjà été sauvegardé localement
-      if (!await messageExistsLocally(textMessageId)) {
-        await saveMessageLocally(localMessage);
-      } else {
-        print("Le message ${textMessageId} existe déjà localement.");
-        return; // Arrêter l'exécution si le message existe déjà
-      }
+      // Sauvegarder localement
+      await _saveLocalMessageIfNotExists(localMessage, receiverId);
 
       // Vérifier la connectivité réseau
       bool isConnected = await isConnectedToNetwork();
-
       if (isConnected) {
-        // await syncMessages(receiverId);
-        await saveToMessageCollection(
-          receiverId: receiverId,
-          textMessage: textMessage,
-          timeSent: timeSent,
-          textMessageId: textMessageId,
-          senderUsername: senderData.username,
-          receiverUsername: receiverData?.username ?? 'Utilisateur inconnu',
-          messageType: myMessageType.MessageType.text,
-          messageReply: messageReply,
-          isGroupChat: isGroupChat,
-        );
-        saveAsLastMessage(
-          senderUserData: senderData,
-          receiverUserData: receiverData,
-          lastMessage: textMessage,
-          timeSent: timeSent,
-          receiverId: receiverId,
-          isGroupChat: isGroupChat,
-        );
-
-        // Mise à jour du statut une fois envoyé
-        await updateMessageStatus(
-          messageId: textMessageId,
-          status: MessageStatus.sent,
-          receiverId: receiverId,
-        );
-
-        // Mettre à jour sqlite une fois le message envoyé
-        await updateMessageStatusInSQLite(textMessageId, MessageStatus.sent);
+        await _sendMessageToFirestore(
+            receiverId,
+            senderData,
+            textMessage,
+            timeSent,
+            textMessageId,
+            messageReply,
+            isGroupChat,
+            receiverData); // Passer receiverData ici
+        await _syncPendingMessages(
+            receiverId, receiverData, isGroupChat); // Passer receiverData ici
       } else {
         print(
             "Message sauvegardé localement. Il sera envoyé lorsque la connexion sera rétablie.");
       }
     } catch (e) {
       if (context.mounted) {
-        print('pour sendtext message on a:  ${e.toString()}');
+        print('Erreur lors de l\'envoi du message: ${e.toString()}');
         showAlertDialog(
             context: context,
-            message: 'pour sendtext message on a:  ${e.toString()}');
+            message: 'Erreur lors de l\'envoi du message: ${e.toString()}');
       }
+    }
+  }
+
+  Future<UserModel?> _getReceiverData(String receiverId) async {
+    if (receiverId.isEmpty) {
+      print("Le receiverId est vide.");
+      return null;
+    }
+
+    final receiverDataMap =
+        await firestore.collection('users').doc(receiverId).get();
+    if (receiverDataMap.exists) {
+      return UserModel.fromMap(receiverDataMap.data()!);
+    } else {
+      print("L'utilisateur avec l'ID $receiverId n'existe pas.");
+      return null;
+    }
+  }
+
+  MessageModel _createLocalMessage(
+    String messageId,
+    UserModel senderData,
+    String receiverId,
+    String textMessage,
+    DateTime timeSent,
+    MessageReply? messageReply,
+    UserModel? receiverData, // Recevoir receiverData ici
+  ) {
+    return MessageModel(
+      senderId: senderData.uid,
+      receiverId: receiverId,
+      textMessage: textMessage,
+      type: myMessageType.MessageType.text,
+      timeSent: timeSent,
+      messageId: messageId,
+      status: MessageStatus.pending,
+      repliedMessage: messageReply?.message ?? '',
+      repliedTo: messageReply == null
+          ? ''
+          : messageReply.isMe
+              ? senderData.username
+              : receiverData?.username ?? '',
+      repliedMessageType:
+          messageReply?.messageType ?? myMessageType.MessageType.text,
+    );
+  }
+
+  Future<void> _saveLocalMessageIfNotExists(
+      MessageModel localMessage, String receiverId) async {
+    if (!await messageExistsLocally(localMessage.messageId)) {
+      await saveMessageLocally(localMessage);
+      final localMessages = await getLocalMessages(receiverId);
+      _messageController.add(localMessages);
+    } else {
+      print("Le message ${localMessage.messageId} existe déjà localement.");
+    }
+  }
+
+  Future<void> _sendMessageToFirestore(
+    String receiverId,
+    UserModel senderData,
+    String textMessage,
+    DateTime timeSent,
+    String messageId,
+    MessageReply? messageReply,
+    bool isGroupChat,
+    UserModel? receiverData, // Passer receiverData ici
+  ) async {
+    await saveToMessageCollection(
+      receiverId: receiverId,
+      textMessage: textMessage,
+      timeSent: timeSent,
+      textMessageId: messageId,
+      senderUsername: senderData.username,
+      receiverUsername: receiverData?.username ??
+          'Utilisateur inconnu', // Utiliser receiverData ici
+      messageType: myMessageType.MessageType.text,
+      messageReply: messageReply,
+      isGroupChat: isGroupChat,
+    );
+    await saveAsLastMessage(
+      senderUserData: senderData,
+      receiverUserData: receiverData,
+      lastMessage: textMessage,
+      timeSent: timeSent,
+      receiverId: receiverId,
+      isGroupChat: isGroupChat,
+    );
+
+    // Mise à jour du statut une fois envoyé
+    await updateMessageStatus(
+        messageId: messageId,
+        status: MessageStatus.sent,
+        receiverId: receiverId);
+    await updateMessageStatusInSQLite(messageId, MessageStatus.sent);
+  }
+
+  Future<void> _syncPendingMessages(
+      String receiverId, UserModel? receiverData, bool isGroupChat) async {
+    List<MessageModel> pendingMessages = await getPendingMessagesFromSQLite();
+    for (MessageModel pendingMessage in pendingMessages) {
+      await saveToMessageCollection(
+        receiverId: pendingMessage.receiverId,
+        textMessage: pendingMessage.textMessage,
+        timeSent: pendingMessage.timeSent,
+        textMessageId: pendingMessage.messageId,
+        senderUsername: pendingMessage.senderId,
+        receiverUsername: receiverData?.username ??
+            'Utilisateur inconnu', // Utiliser receiverData ici
+        messageType: pendingMessage.type,
+        messageReply: null,
+        isGroupChat: isGroupChat,
+      );
     }
   }
 
   Future<void> updateMessageStatusInSQLite(
       String messageId, MessageStatus newStatus) async {
-    await DatabaseHelper().updateMessageStatus(messageId, newStatus.toString());
+    final db = await DatabaseHelper().database;
+
+    // Met à jour uniquement si le statut est différent
+    await db.rawUpdate('''
+    UPDATE messages
+    SET status = ?
+    WHERE messageId = ? AND status != ?
+  ''', [
+      _getStringFromStatus(newStatus),
+      messageId,
+      _getStringFromStatus(newStatus)
+    ]);
+
+    print("Statut du message mis à jour dans SQLite : $messageId");
   }
 
   saveToMessageCollection({
@@ -886,5 +1080,9 @@ class ChatRepository {
       case MessageStatus.pending:
         return 'pending';
     }
+  }
+
+  void dispose() {
+    _messageController.close();
   }
 }

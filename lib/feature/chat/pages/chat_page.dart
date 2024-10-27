@@ -18,6 +18,7 @@ import 'package:tuyage/feature/auth/controller/auth_controller.dart';
 import 'package:tuyage/feature/call/controller/call_controller.dart';
 import 'package:tuyage/feature/call/screens/call_pickup_screen.dart';
 import 'package:tuyage/feature/chat/controller/chat_controller.dart';
+import 'package:tuyage/feature/chat/repository/chat_repository.dart';
 import 'package:tuyage/feature/chat/widgets/chat_text_field.dart';
 import 'package:tuyage/feature/chat/widgets/message_card.dart';
 import 'package:tuyage/feature/chat/widgets/show_date_card.dart';
@@ -270,7 +271,9 @@ class ChatPage extends ConsumerWidget {
                     ? ref
                         .watch(chatControllerProvider)
                         .getAllOneToOneGroupMessage(uid)
-                    : ref.watch(chatControllerProvider).getMessages(uid),
+                    : ref
+                        .watch(chatRepositoryProvider)
+                        .getAllOneToOneMessage(uid),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return ListView.builder(
@@ -318,6 +321,11 @@ class ChatPage extends ConsumerWidget {
 
                   if (snapshot.hasData) {
                     final messages = snapshot.data!;
+                    if (messages.isEmpty) {
+                      return const Center(
+                          child: Text(
+                              'Aucun message à afficher.')); // Aucun message dans SQLite
+                    }
                     return PageStorage(
                       bucket: pageStorageBucket,
                       child: ListView.builder(

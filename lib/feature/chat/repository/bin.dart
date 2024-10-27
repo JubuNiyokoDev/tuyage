@@ -458,3 +458,383 @@
 //     });
 //   }
 // }
+
+
+
+
+
+  // void sendTextMessage({
+  //   required BuildContext context,
+  //   required String textMessage,
+  //   required String receiverId,
+  //   required UserModel senderData,
+  //   required MessageReply? messageReply,
+  //   required bool isGroupChat,
+  // }) async {
+  //   try {
+  //     final timeSent = DateTime.now();
+  //     UserModel? receiverData;
+
+  //     // Récupérer les données du destinataire si ce n'est pas un chat de groupe
+  //     if (!isGroupChat) {
+  //       if (receiverId.isEmpty) {
+  //         print("Le receiverId est vide.");
+  //         return;
+  //       }
+  //       print("Le receiverId n'est pas vide.");
+  //       final receiverDataMap =
+  //           await firestore.collection('users').doc(receiverId).get();
+  //       // Vérifie que les données existent avant de créer l'utilisateur
+  //       if (receiverDataMap.exists) {
+  //         receiverData = UserModel.fromMap(receiverDataMap.data()!);
+  //       } else {
+  //         // Gestion d'erreur si l'utilisateur n'existe pas
+  //         print("L'utilisateur avec l'ID $receiverId n'existe pas.");
+  //         return;
+  //       }
+  //     }
+
+  //     // Génération de l'ID du message unique
+  //     final textMessageId = const Uuid().v1();
+
+  //     print('Sender ID: ${senderData.uid}');
+  //     print('Receiver ID: $receiverId');
+  //     print('Text Message: $textMessage');
+  //     print('Replied Message: ${messageReply?.message}');
+  //     print(
+  //         'Replied To: ${messageReply == null ? '' : messageReply.isMe ? (senderData.username ?? 'Utilisateur inconnu') : (receiverData?.username ?? 'Utilisateur inconnu')}');
+  //     print('Receiver Username: ${receiverData?.username}');
+
+  //     // Création du modèle de message local
+  //     final localMessage = MessageModel(
+  //       senderId: senderData.uid,
+  //       receiverId: receiverId,
+  //       textMessage: textMessage,
+  //       type: myMessageType.MessageType.text,
+  //       timeSent: timeSent,
+  //       messageId: textMessageId,
+  //       status: MessageStatus.pending,
+  //       repliedMessage: messageReply?.message ?? '',
+  //       repliedTo: messageReply == null
+  //           ? ''
+  //           : messageReply.isMe
+  //               ? senderData.username
+  //               : receiverData?.username ?? '',
+  //       repliedMessageType:
+  //           messageReply?.messageType ?? myMessageType.MessageType.text,
+  //     );
+
+  //     // Vérifier si le message n'a pas déjà été sauvegardé localement
+  //     if (!await messageExistsLocally(textMessageId)) {
+  //       await saveMessageLocally(localMessage);
+  //       final localMessages = await getLocalMessages(receiverId);
+  //       _messageController.add(localMessages);
+  //     } else {
+  //       print("Le message ${textMessageId} existe déjà localement.");
+  //       return; // Arrêter l'exécution si le message existe déjà
+  //     }
+
+  //     // Vérifier la connectivité réseau
+  //     bool isConnected = await isConnectedToNetwork();
+
+  //     if (isConnected) {
+  //       await saveToMessageCollection(
+  //         receiverId: receiverId,
+  //         textMessage: textMessage,
+  //         timeSent: timeSent,
+  //         textMessageId: textMessageId,
+  //         senderUsername: senderData.username,
+  //         receiverUsername: receiverData?.username ?? 'Utilisateur inconnu',
+  //         messageType: myMessageType.MessageType.text,
+  //         messageReply: messageReply,
+  //         isGroupChat: isGroupChat,
+  //       );
+  //       saveAsLastMessage(
+  //         senderUserData: senderData,
+  //         receiverUserData: receiverData,
+  //         lastMessage: textMessage,
+  //         timeSent: timeSent,
+  //         receiverId: receiverId,
+  //         isGroupChat: isGroupChat,
+  //       );
+
+  //       // Mise à jour du statut une fois envoyé
+  //       await updateMessageStatus(
+  //         messageId: textMessageId,
+  //         status: MessageStatus.sent,
+  //         receiverId: receiverId,
+  //       );
+
+  //       // Mettre à jour sqlite une fois le message envoyé
+  //       await updateMessageStatusInSQLite(textMessageId, MessageStatus.sent);
+  //       List<MessageModel> pendingMessages =
+  //           await getPendingMessagesFromSQLite();
+  //       for (MessageModel pendingMessage in pendingMessages) {
+  //         await saveToMessageCollection(
+  //           receiverId: pendingMessage.receiverId,
+  //           textMessage: pendingMessage.textMessage,
+  //           timeSent: pendingMessage.timeSent,
+  //           textMessageId: pendingMessage.messageId,
+  //           senderUsername: pendingMessage.senderId,
+  //           receiverUsername: receiverData?.username ?? 'Utilisateur inconnu',
+  //           messageType: pendingMessage.type,
+  //           messageReply: null, // Ajuste si nécessaire
+  //           isGroupChat: isGroupChat, // Ajuste si nécessaire
+  //         );
+  //       }
+  //       await syncMessages(receiverId);
+  //     } else {
+  //       print(
+  //           "Message sauvegardé localement. Il sera envoyé lorsque la connexion sera rétablie.");
+  //     }
+  //   } catch (e) {
+  //     if (context.mounted) {
+  //       print('pour sendtext message on a:  ${e.toString()}');
+  //       showAlertDialog(
+  //           context: context,
+  //           message: 'pour sendtext message on a:  ${e.toString()}');
+  //     }
+  //   }
+  // }
+
+
+
+  //est ce que pour affiche les messages on ne peut pas faire de maniere que si online or offline il retourne toujour les messages car je vois que si j'ecrit un message online directe est affiche dans les messages bien mais si j'envoie oflline il ne s'affiche pas directement: Stream<List<MessageModel>> getAllOneToOneMessage(String receiverId) async* { 
+  //   try {
+  //     // Charger les messages locaux en premier
+  //     final localMessages = await getLocalMessages(receiverId);
+  //     if (localMessages.isNotEmpty) {
+  //       yield localMessages;
+  //     }
+
+  //     final isConnected = await isConnectedToNetwork();
+
+  //     if (isConnected) {
+  //       print('Récupération des messages depuis Firestore :');
+  //       // Charger les messages depuis Firestore
+  //       yield* firestore
+  //           .collection('users')
+  //           .doc(auth.currentUser!.uid)
+  //           .collection('chats')
+  //           .doc(receiverId)
+  //           .collection('messages')
+  //           .orderBy('timeSent', descending: false)
+  //           .snapshots()
+  //           .map((snapshot) {
+  //         if (snapshot.docs.isEmpty) {
+  //           print('Aucun message trouvé pour ce destinataire.');
+  //           return <MessageModel>[]; // Retourner une liste vide si aucun message
+  //         }
+
+  //         final messages = snapshot.docs.map((doc) {
+  //           var data = doc.data();
+
+  //           print('Message ID: ${doc.id}, Status: ${data['status']}');
+
+  //           return MessageModel.fromMap({
+  //             'messageId': doc.id,
+  //             'senderId': data['senderId'],
+  //             'receiverId': data['receiverId'],
+  //             'textMessage': data['textMessage'],
+  //             'type': data['type'],
+  //             'timeSent': data['timeSent'],
+  //             'status': data['status'],
+  //             'repliedMessage': data['repliedMessage'] ?? '',
+  //             'repliedTo': data['repliedTo'] ?? '',
+  //             'repliedMessageType': data['repliedMessageType'] ?? '',
+  //           });
+  //         }).toList();
+
+  //         // Synchroniser avec SQLite
+  //         _syncMessagesWithSQLite(messages);
+
+  //         return messages;
+  //       }).handleError((error) {
+  //         print(
+  //             'Erreur lors de la récupération des messages depuis Firestore: $error');
+  //         return <MessageModel>[]; // En cas d'erreur, renvoyer une liste vide
+  //       });
+  //     } else {
+  //       print('Récupération des messages depuis SQLITE :');
+  //       yield localMessages;
+  //     }
+  //   } catch (error) {
+  //     print('Erreur dans getAllOneToOneMessage: $error');
+  //     yield <MessageModel>[]; // En cas d'erreur, renvoyer une liste vide
+  //   }
+  // } Future<void> sendTextMessage({
+  //   required BuildContext context,
+  //   required String textMessage,
+  //   required String receiverId,
+  //   required UserModel senderData,
+  //   required MessageReply? messageReply,
+  //   required bool isGroupChat,
+  // }) async {
+  //   try {
+  //     final timeSent = DateTime.now();
+  //     UserModel? receiverData;
+
+  //     // Récupérer les données du destinataire si ce n'est pas un chat de groupe
+  //     if (!isGroupChat) {
+  //       receiverData = await _getReceiverData(receiverId);
+  //       if (receiverData == null)
+  //         return; // Sortir si l'utilisateur n'existe pas
+  //     }
+
+  //     // Génération de l'ID du message unique
+  //     final textMessageId = const Uuid().v1();
+
+  //     // Création du modèle de message local
+  //     final localMessage = _createLocalMessage(
+  //       textMessageId,
+  //       senderData,
+  //       receiverId,
+  //       textMessage,
+  //       timeSent,
+  //       messageReply,
+  //       receiverData, // Passer receiverData ici
+  //     );
+
+  //     // Sauvegarder localement
+  //     await _saveLocalMessageIfNotExists(localMessage, receiverId);
+
+  //     // Vérifier la connectivité réseau
+  //     bool isConnected = await isConnectedToNetwork();
+  //     if (isConnected) {
+  //       await _sendMessageToFirestore(
+  //           receiverId,
+  //           senderData,
+  //           textMessage,
+  //           timeSent,
+  //           textMessageId,
+  //           messageReply,
+  //           isGroupChat,
+  //           receiverData); // Passer receiverData ici
+  //       await _syncPendingMessages(
+  //           receiverId, receiverData, isGroupChat); // Passer receiverData ici
+  //     } else {
+  //       print(
+  //           "Message sauvegardé localement. Il sera envoyé lorsque la connexion sera rétablie.");
+  //     }
+  //   } catch (e) {
+  //     if (context.mounted) {
+  //       print('Erreur lors de l\'envoi du message: ${e.toString()}');
+  //       showAlertDialog(
+  //           context: context,
+  //           message: 'Erreur lors de l\'envoi du message: ${e.toString()}');
+  //     }
+  //   }
+  // }
+
+  // Future<UserModel?> _getReceiverData(String receiverId) async {
+  //   if (receiverId.isEmpty) {
+  //     print("Le receiverId est vide.");
+  //     return null;
+  //   }
+
+  //   final receiverDataMap =
+  //       await firestore.collection('users').doc(receiverId).get();
+  //   if (receiverDataMap.exists) {
+  //     return UserModel.fromMap(receiverDataMap.data()!);
+  //   } else {
+  //     print("L'utilisateur avec l'ID $receiverId n'existe pas.");
+  //     return null;
+  //   }
+  // }
+
+  // MessageModel _createLocalMessage(
+  //   String messageId,
+  //   UserModel senderData,
+  //   String receiverId,
+  //   String textMessage,
+  //   DateTime timeSent,
+  //   MessageReply? messageReply,
+  //   UserModel? receiverData, // Recevoir receiverData ici
+  // ) {
+  //   return MessageModel(
+  //     senderId: senderData.uid,
+  //     receiverId: receiverId,
+  //     textMessage: textMessage,
+  //     type: myMessageType.MessageType.text,
+  //     timeSent: timeSent,
+  //     messageId: messageId,
+  //     status: MessageStatus.pending,
+  //     repliedMessage: messageReply?.message ?? '',
+  //     repliedTo: messageReply == null
+  //         ? ''
+  //         : messageReply.isMe
+  //             ? senderData.username
+  //             : receiverData?.username ?? '',
+  //     repliedMessageType:
+  //         messageReply?.messageType ?? myMessageType.MessageType.text,
+  //   );
+  // }
+
+  // Future<void> _saveLocalMessageIfNotExists(
+  //     MessageModel localMessage, String receiverId) async {
+  //   if (!await messageExistsLocally(localMessage.messageId)) {
+  //     await saveMessageLocally(localMessage);
+  //     final localMessages = await getLocalMessages(receiverId);
+  //     _messageController.add(localMessages);
+  //   } else {
+  //     print("Le message ${localMessage.messageId} existe déjà localement.");
+  //   }
+  // }
+
+  // Future<void> _sendMessageToFirestore(
+  //   String receiverId,
+  //   UserModel senderData,
+  //   String textMessage,
+  //   DateTime timeSent,
+  //   String messageId,
+  //   MessageReply? messageReply,
+  //   bool isGroupChat,
+  //   UserModel? receiverData, // Passer receiverData ici
+  // ) async {
+  //   await saveToMessageCollection(
+  //     receiverId: receiverId,
+  //     textMessage: textMessage,
+  //     timeSent: timeSent,
+  //     textMessageId: messageId,
+  //     senderUsername: senderData.username,
+  //     receiverUsername: receiverData?.username ??
+  //         'Utilisateur inconnu', // Utiliser receiverData ici
+  //     messageType: myMessageType.MessageType.text,
+  //     messageReply: messageReply,
+  //     isGroupChat: isGroupChat,
+  //   );
+  //   await saveAsLastMessage(
+  //     senderUserData: senderData,
+  //     receiverUserData: receiverData,
+  //     lastMessage: textMessage,
+  //     timeSent: timeSent,
+  //     receiverId: receiverId,
+  //     isGroupChat: isGroupChat,
+  //   );
+
+  //   // Mise à jour du statut une fois envoyé
+  //   await updateMessageStatus(
+  //       messageId: messageId,
+  //       status: MessageStatus.sent,
+  //       receiverId: receiverId);
+  //   await updateMessageStatusInSQLite(messageId, MessageStatus.sent);
+  // }
+
+  // Future<void> _syncPendingMessages(
+  //     String receiverId, UserModel? receiverData, bool isGroupChat) async {
+  //   List<MessageModel> pendingMessages = await getPendingMessagesFromSQLite();
+  //   for (MessageModel pendingMessage in pendingMessages) {
+  //     await saveToMessageCollection(
+  //       receiverId: pendingMessage.receiverId,
+  //       textMessage: pendingMessage.textMessage,
+  //       timeSent: pendingMessage.timeSent,
+  //       textMessageId: pendingMessage.messageId,
+  //       senderUsername: pendingMessage.senderId,
+  //       receiverUsername: receiverData?.username ??
+  //           'Utilisateur inconnu', // Utiliser receiverData ici
+  //       messageType: pendingMessage.type,
+  //       messageReply: null,
+  //       isGroupChat: isGroupChat,
+  //     );
+  //   }
+  // }  par exemple pour whatsapp si on envoie un message meme offline on te montre le message directement avec status pending si tu ouvre la connection on ne load pas meme la page mais on reenvoye le message pending alors je voulais faire de la meme maniere svp aide moi

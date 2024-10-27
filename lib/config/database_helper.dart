@@ -49,13 +49,29 @@ class DatabaseHelper {
         repliedMessageType TEXT
       )
     ''');
+
+    // Appeler la fonction pour créer la table "sync_metadata"
+    await _createSyncMetadataTable(db);
+  }
+
+  // Fonction pour créer la table "sync_metadata"
+  Future<void> _createSyncMetadataTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE sync_metadata (
+        receiver_id TEXT PRIMARY KEY,
+        last_sync_time TEXT
+      )
+    ''');
   }
 
   // Insérer un message dans la base de données
   Future<int> insertMessage(Map<String, dynamic> message) async {
     final db = await database;
-    return await db.insert('messages', message,
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    return await db.insert(
+      'messages',
+      message,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   // Récupérer les messages pour un utilisateur spécifique
@@ -68,17 +84,6 @@ class DatabaseHelper {
     );
   }
 
-  // Mettre à jour le statut d'un message
-  Future<void> updateMessageStatus(String messageId, String status) async {
-    final db = await database;
-    await db.update(
-      'messages',
-      {'status': status},
-      where: 'messageId = ?',
-      whereArgs: [messageId],
-    );
-  }
-
   // Supprimer un message de la base de données
   Future<void> deleteMessage(String messageId) async {
     final db = await database;
@@ -86,6 +91,43 @@ class DatabaseHelper {
       'messages',
       where: 'messageId  = ?',
       whereArgs: [messageId],
+    );
+  }
+
+  // Récupérer l'horodatage du dernier message synchronisé pour un destinataire
+  Future<DateTime?> getLastSyncTime(String receiverId) async {
+    final db = await database;
+
+    // Récupérer l'horodatage de la dernière synchronisation pour ce destinataire
+    final result = await db.query(
+      'sync_metadata',
+      columns: ['last_sync_time'],
+      where: 'receiver_id = ?',
+      whereArgs: [receiverId],
+    );
+
+    if (result.isNotEmpty) {
+      // Convertir l'horodatage en DateTime
+      return DateTime.parse(result.first['last_sync_time'] as String);
+    } else {
+      return null; // Aucun horodatage trouvé pour ce destinataire
+    }
+  }
+
+  // Mettre à jour l'horodatage du dernier message synchronisé pour un destinataire
+  Future<void> updateLastSyncTime(
+      String receiverId, DateTime lastSyncTime) async {
+    final db = await database;
+
+    // Insérer ou mettre à jour l'horodatage du dernier message synchronisé
+    await db.insert(
+      'sync_metadata',
+      {
+        'receiver_id': receiverId,
+        'last_sync_time': lastSyncTime.toIso8601String(),
+      },
+      conflictAlgorithm:
+          ConflictAlgorithm.replace, // Remplace si le destinataire existe déjà
     );
   }
 }
