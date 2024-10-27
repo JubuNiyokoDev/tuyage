@@ -117,7 +117,7 @@ class ChatRepository {
         .collection('messages')
         .where(
           'status',
-          isEqualTo: _getStringFromStatus(MessageStatus.sent),
+          isEqualTo: _getStringFromStatus(MessageStatus.pending),
         )
         .get();
 
