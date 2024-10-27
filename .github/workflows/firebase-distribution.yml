@@ -1,0 +1,43 @@
+name: Firebase App Distribution
+
+on:
+  push:
+    branches:
+      - main  # Change to the branch you want to trigger the build on
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v1
+        with:
+          java-version: '11'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Install Firebase CLI
+        run: curl -sL https://firebase.tools | bash
+
+      - name: Upload to Firebase App Distribution
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          ANDROID_APP_ID: ${{ secrets.ANDROID_APP_ID }}
+          TESTER_EMAILS: ${{ secrets.TESTER_EMAILS }}
+        run: |
+          firebase appdistribution:distribute build/app/outputs/flutter-apk/app-release.apk \
+          --app $ANDROID_APP_ID \
+          --testers $TESTER_EMAILS
