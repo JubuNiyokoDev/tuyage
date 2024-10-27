@@ -3,7 +3,7 @@ name: Firebase App Distribution
 on:
   push:
     branches:
-      - master  
+      - master  # Utiliser la branche master
 
 jobs:
   build:
@@ -17,11 +17,12 @@ jobs:
         uses: actions/setup-java@v2
         with:
           java-version: '17'
+          distribution: 'temurin'  # Ajouté ici pour spécifier la distribution
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.4' # Assurez-vous que cette version est correcte
+          flutter-version: '3.24.4'  # Assurez-vous que cette version est correcte
 
       - name: Install dependencies
         run: flutter pub get
