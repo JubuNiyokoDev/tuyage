@@ -104,7 +104,7 @@ class UserProfilePage extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
                 ListTile(
-                  contentPadding: EdgeInsets.only(left: 25, right: 10),
+                  contentPadding: const EdgeInsets.only(left: 25, right: 10),
                   leading: const Icon(
                     Icons.block,
                     color: Color(0xFFF15C6D),
@@ -117,7 +117,7 @@ class UserProfilePage extends StatelessWidget {
                   ),
                 ),
                 ListTile(
-                  contentPadding: EdgeInsets.only(left: 25, right: 10),
+                  contentPadding: const EdgeInsets.only(left: 25, right: 10),
                   leading: const Icon(
                     Icons.thumb_down,
                     color: Color(0xFFF15C6D),

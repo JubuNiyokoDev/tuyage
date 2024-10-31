@@ -67,12 +67,25 @@ class ChatPage extends ConsumerWidget {
         );
   }
 
+  void scrollToBottom() {
+    scrollController.animateTo(
+      scrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  }
+
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     var firebaseUser = FirebaseAuth.instance.currentUser;
-    final displayUsername = uid == firebaseUser!.uid ? '${name} (You)' : name;
+    final displayUsername = uid == firebaseUser!.uid ? '$name (You)' : name;
     final currentUserId = firebaseUser.uid;
 
+
+WidgetsBinding.instance.addPostFrameCallback((_) {
+      scrollToBottom();
+    });
     scrollController.addListener(() {
       final offset = scrollController.offset;
       final viewportHeight = scrollController.position.viewportDimension;

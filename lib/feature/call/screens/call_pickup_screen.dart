@@ -11,9 +11,9 @@ import 'package:tuyage/feature/call/screens/call_screen.dart';
 class CallPickupScreen extends ConsumerWidget {
   final Widget scaffold;
   const CallPickupScreen({
-    Key? key,
+    super.key,
     required this.scaffold,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

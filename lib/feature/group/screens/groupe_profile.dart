@@ -58,7 +58,7 @@ class GroupProfilePage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 20),
-                CustomListTile(
+                const CustomListTile(
                   title: 'Group Settings',
                   leading: Icons.settings,
                 ),
@@ -77,15 +77,15 @@ class GroupProfilePage extends StatelessWidget {
                   leading: Icons.lock,
                 ),
                 const SizedBox(height: 20),
-                ListTile(
+                const ListTile(
                   contentPadding: EdgeInsets.only(left: 25, right: 10),
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.block,
                     color: Color(0xFFF15C6D),
                   ),
                   title: Text(
                     'Leave Group',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Color(0xFFF15C6D),
                     ),
                   ),

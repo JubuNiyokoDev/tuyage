@@ -8,7 +8,7 @@ import 'package:tuyage/feature/group/controller/group_controller.dart';
 import 'package:tuyage/feature/group/widgets/select_contacts_group.dart';
 
 class CreateGroupScreen extends ConsumerStatefulWidget {
-  const CreateGroupScreen({Key? key}) : super(key: key);
+  const CreateGroupScreen({super.key});
 
   @override
   ConsumerState<CreateGroupScreen> createState() => _CreateGroupeScreen();

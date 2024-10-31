@@ -9,7 +9,7 @@ import 'package:tuyage/common/helper/show_loading_dialog.dart';
 class ConfirmStatusScreen extends ConsumerWidget {
   final File file;
 
-  const ConfirmStatusScreen({Key? key, required this.file}) : super(key: key);
+  const ConfirmStatusScreen({super.key, required this.file});
 
   Future<void> addStatus(WidgetRef ref, BuildContext context) async {
     try {
@@ -34,8 +34,8 @@ class ConfirmStatusScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => addStatus(ref, context),
-        child: const Icon(Icons.done),
         backgroundColor: Coloors.greenDark,
+        child: const Icon(Icons.done),
       ),
     );
   }

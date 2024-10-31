@@ -8,7 +8,7 @@ import 'package:tuyage/common/enum/message_type.dart' as myMessageType;
 import 'package:tuyage/feature/chat/widgets/video_player_item.dart';
 
 class MessageReplyPreview extends ConsumerWidget {
-  const MessageReplyPreview({Key? key}) : super(key: key);
+  const MessageReplyPreview({super.key});
 
   void cancelReply(WidgetRef ref) {
     ref.read(messageReplyProvider.state).update((state) => null);

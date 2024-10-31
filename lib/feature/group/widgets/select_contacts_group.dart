@@ -7,7 +7,7 @@ import 'package:tuyage/feature/contact/controller/contacts_controller.dart';
 final selectedGroupContacts = StateProvider<List<UserModel>>((ref) => []);
 
 class SelectContactsGroup extends ConsumerStatefulWidget {
-  const SelectContactsGroup({Key? key}) : super(key: key);
+  const SelectContactsGroup({super.key});
 
   @override
   ConsumerState<ConsumerStatefulWidget> createState() =>
@@ -51,7 +51,7 @@ class _SelectContactsGroupState extends ConsumerState<SelectContactsGroup> {
                         leading: selectedContactIndex.contains(index)
                             ? IconButton(
                                 onPressed: () {},
-                                icon: Icon(Icons.done),
+                                icon: const Icon(Icons.done),
                               )
                             : null,
                       ),

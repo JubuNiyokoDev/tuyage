@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tuyage/common/enum/message_status.dart';
@@ -76,6 +78,12 @@ class ChatRepository {
       }
     });
   }
+
+  Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  print('Message reçu en arrière-plan: ${message.messageId}');
+}
+
 
   Future<void> updateUserLastSeen(String uid) async {
     await firestore.collection('users').doc(uid).update({
@@ -609,8 +617,9 @@ class ChatRepository {
       // Récupérer les données du destinataire si ce n'est pas un chat de groupe
       if (!isGroupChat) {
         receiverData = await _getReceiverData(receiverId);
-        if (receiverData == null)
+        if (receiverData == null) {
           return; // Sortir si l'utilisateur n'existe pas
+        }
       }
 
       // Génération de l'ID du message unique
