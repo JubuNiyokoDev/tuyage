@@ -228,7 +228,7 @@ class ChatHomePage extends ConsumerWidget {
                                     ),
                                   ),
                                   errorWidget: (context, url, error) =>
-                                      Container(
+                                      SizedBox(
                                     width:
                                         48, // Ajuste la taille selon tes besoins
                                     height:

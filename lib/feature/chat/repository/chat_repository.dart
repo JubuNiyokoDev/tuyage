@@ -609,8 +609,9 @@ class ChatRepository {
       // Récupérer les données du destinataire si ce n'est pas un chat de groupe
       if (!isGroupChat) {
         receiverData = await _getReceiverData(receiverId);
-        if (receiverData == null)
+        if (receiverData == null) {
           return; // Sortir si l'utilisateur n'existe pas
+        }
       }
 
       // Génération de l'ID du message unique

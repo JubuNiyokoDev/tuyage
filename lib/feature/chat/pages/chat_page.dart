@@ -81,7 +81,7 @@ class ChatPage extends ConsumerWidget {
     final GlobalKey lastMessageKey = GlobalKey();
 
     var firebaseUser = FirebaseAuth.instance.currentUser;
-    final displayUsername = uid == firebaseUser!.uid ? '${name} (You)' : name;
+    final displayUsername = uid == firebaseUser!.uid ? '$name (You)' : name;
     final currentUserId = firebaseUser.uid;
 
     scrollController.addListener(() {

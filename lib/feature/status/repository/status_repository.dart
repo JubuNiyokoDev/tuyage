@@ -88,9 +88,8 @@ class StatusRepository {
             .collection('status')
             .doc(statusId)
             .set(status.toMap())
-            .then((_) {
-          ;
-        }).catchError((error) {
+            .then((_) {})
+            .catchError((error) {
           print("Error saving status to Firestore: $error");
           showAlertDialog(context: context, message: error.toString());
         });

@@ -12,11 +12,11 @@ class CallScreen extends ConsumerStatefulWidget {
   final bool isGroupChat;
 
   const CallScreen({
-    Key? key,
+    super.key,
     required this.call,
     required this.channelId,
     required this.isGroupChat,
-  }) : super(key: key);
+  });
 
   @override
   ConsumerState<ConsumerStatefulWidget> createState() => _CallScreen();

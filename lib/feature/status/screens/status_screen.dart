@@ -5,9 +5,9 @@ import 'package:tuyage/common/models/status_model.dart';
 class StatusScreen extends StatefulWidget {
   final Status status;
   const StatusScreen({
-    Key? key,
+    super.key,
     required this.status,
-  }) : super(key: key);
+  });
 
   @override
   State<StatusScreen> createState() => _StatusScreenState();
@@ -16,6 +16,7 @@ class StatusScreen extends StatefulWidget {
 class _StatusScreenState extends State<StatusScreen> {
   StoryController controller = StoryController();
   List<StoryItem> storyItems = [];
+  @override
   void initState() {
     super.initState();
     initStoryPageItem();

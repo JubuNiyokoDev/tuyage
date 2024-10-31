@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:tuyage/common/routes/routes.dart';
 import 'package:tuyage/common/theme/dark_theme.dart';
 import 'package:tuyage/common/theme/light_theme.dart';

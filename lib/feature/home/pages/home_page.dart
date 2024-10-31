@@ -227,7 +227,7 @@ class _HomePageState extends ConsumerState<HomePage>
                 bottom: TabBar(
                   controller: tabBarController,
                   indicatorWeight: 3,
-                  labelStyle: TextStyle(fontWeight: FontWeight.bold),
+                  labelStyle: const TextStyle(fontWeight: FontWeight.bold),
                   splashFactory: NoSplash.splashFactory,
                   tabs: const [
                     Tab(text: 'Chat zanje'),
