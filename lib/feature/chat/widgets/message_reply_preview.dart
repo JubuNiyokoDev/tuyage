@@ -35,7 +35,7 @@ class MessageReplyPreview extends ConsumerWidget {
             children: [
               Expanded(
                 child: Text(
-                  messageReply!.isMe ? "Jew" :'Undi',
+                  messageReply!.isMe ? "Jew" : 'Undi',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                   ),

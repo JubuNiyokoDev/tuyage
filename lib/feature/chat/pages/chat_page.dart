@@ -46,6 +46,15 @@ class ChatPage extends ConsumerWidget {
   final UserModel? user;
   final ScrollController scrollController = ScrollController();
 
+  final ValueNotifier<bool> showScrollToBottomButton = ValueNotifier(false);
+  void scrollToBottom() {
+    scrollController.animateTo(
+      scrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  }
+
   void makeCall(WidgetRef ref, BuildContext context) {
     ref.read(callControllerProvider).makeCall(
           context,
@@ -78,6 +87,8 @@ class ChatPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final GlobalKey lastMessageKey = GlobalKey();
+
     var firebaseUser = FirebaseAuth.instance.currentUser;
     final displayUsername = uid == firebaseUser!.uid ? '$name (You)' : name;
     final currentUserId = firebaseUser.uid;
@@ -91,6 +102,19 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
       final viewportHeight = scrollController.position.viewportDimension;
       final height = scrollController.position.maxScrollExtent;
 
+      if (lastMessageKey.currentContext != null) {
+        final RenderBox lastMessageBox =
+            lastMessageKey.currentContext!.findRenderObject() as RenderBox;
+        final double lastMessagePosition =
+            lastMessageBox.localToGlobal(Offset.zero).dy;
+
+        if (scrollController.offset >
+            lastMessagePosition + scrollController.position.viewportDimension) {
+          showScrollToBottomButton.value = true;
+        } else {
+          showScrollToBottomButton.value = false;
+        }
+      }
       if (offset >= height - viewportHeight) {
         if (!isGroupChat) {
           ref.read(chatControllerProvider).getMessages(uid).listen((messages) {
@@ -349,6 +373,9 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
                         itemBuilder: (_, index) {
                           final message = messages[index];
                           final isSender = message.senderId == currentUserId;
+                          final key = (index == messages.length - 1)
+                              ? lastMessageKey
+                              : null;
                           final haveNip =
                               _shouldShowNip(index, messages, message);
                           final isShowDateCard =
@@ -367,6 +394,7 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
                               if (isShowDateCard)
                                 ShowDateCard(date: message.timeSent),
                               MessageCard(
+                                key: key,
                                 isSender: isSender,
                                 haveNip: haveNip,
                                 message: message.textMessage,
@@ -432,6 +460,25 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
                 scrollController: scrollController,
                 isGroupChat: isGroupChat,
               ),
+            ),
+            ValueListenableBuilder(
+              valueListenable: showScrollToBottomButton,
+              builder: (context, showButton, child) {
+                return showButton
+                    ? Positioned(
+                        right: 20,
+                        bottom: 70,
+                        child: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: CustomIconButton(
+                            onPressed: scrollToBottom,
+                            icon: Icons.keyboard_double_arrow_down,
+                            iconColor: context.theme.greyColor,
+                          ),
+                        ),
+                      )
+                    : Container();
+              },
             ),
           ],
         ),
