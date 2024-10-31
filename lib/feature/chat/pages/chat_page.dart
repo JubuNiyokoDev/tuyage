@@ -24,6 +24,7 @@ import 'package:tuyage/feature/chat/widgets/message_card.dart';
 import 'package:tuyage/feature/chat/widgets/show_date_card.dart';
 import 'package:tuyage/feature/chat/widgets/yellow_card.dart';
 import 'package:tuyage/common/enum/message_type.dart' as myMessageType;
+import 'package:visibility_detector/visibility_detector.dart';
 
 final pageStorageBucket = PageStorageBucket();
 
@@ -76,39 +77,24 @@ class ChatPage extends ConsumerWidget {
         );
   }
 
-  
-
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 200), () {
+        scrollToBottom();
+      });
+    });
     final GlobalKey lastMessageKey = GlobalKey();
 
     var firebaseUser = FirebaseAuth.instance.currentUser;
     final displayUsername = uid == firebaseUser!.uid ? '$name (You)' : name;
     final currentUserId = firebaseUser.uid;
 
-
-WidgetsBinding.instance.addPostFrameCallback((_) {
-      scrollToBottom();
-    });
     scrollController.addListener(() {
       final offset = scrollController.offset;
       final viewportHeight = scrollController.position.viewportDimension;
       final height = scrollController.position.maxScrollExtent;
-
-      if (lastMessageKey.currentContext != null) {
-        final RenderBox lastMessageBox =
-            lastMessageKey.currentContext!.findRenderObject() as RenderBox;
-        final double lastMessagePosition =
-            lastMessageBox.localToGlobal(Offset.zero).dy;
-
-        if (scrollController.offset >
-            lastMessagePosition + scrollController.position.viewportDimension) {
-          showScrollToBottomButton.value = true;
-        } else {
-          showScrollToBottomButton.value = false;
-        }
-      }
+      // Vérifier si l'utilisateur est en bas de la liste
       if (offset >= height - viewportHeight) {
         if (!isGroupChat) {
           ref.read(chatControllerProvider).getMessages(uid).listen((messages) {
@@ -123,6 +109,8 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
             }
           });
         }
+      } else {
+        showScrollToBottomButton.value = true;
       }
     });
 
@@ -374,7 +362,8 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
                               _shouldShowNip(index, messages, message);
                           final isShowDateCard =
                               _shouldShowDateCard(index, messages, message);
-                          if (message.receiverId == currentUserId) {
+                          if (message.receiverId == currentUserId &&
+                              message.status != MessageStatus.read) {
                             ref
                                 .read(chatControllerProvider)
                                 .updateMessageStatusToRead(
@@ -382,45 +371,53 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
                                   senderId: message.senderId,
                                 );
                           }
+
                           return Column(
                             children: [
                               if (index == 0) const YellowCard(),
                               if (isShowDateCard)
                                 ShowDateCard(date: message.timeSent),
-                              MessageCard(
-                                key: key,
-                                isSender: isSender,
-                                haveNip: haveNip,
-                                message: message.textMessage,
-                                type: message.type,
-                                timeSent: message.timeSent,
-                                status: message.status,
-                                repliedText: message.repliedMessage,
-                                repliedMessageType: message.repliedMessageType,
-                                username: message.repliedTo,
-                                onLeftSwipe: () {
-                                  if (isSender) {
-                                    onMessageSwipe(
-                                      message.textMessage,
-                                      message.senderId ==
-                                          FirebaseAuth
-                                              .instance.currentUser!.uid,
-                                      message.type,
-                                      ref,
-                                    );
+                              VisibilityDetector(
+                                key: key ?? ValueKey(index),
+                                onVisibilityChanged: (info) {
+                                  if (key != null) {
+                                    showScrollToBottomButton.value =
+                                        info.visibleFraction == 0.0;
                                   }
                                 },
-                                onRightSwipe: () {
-                                  if (!isSender) {
-                                    onMessageSwipe(
-                                      message.textMessage,
-                                      false,
-                                      message.type,
-                                      ref,
-                                    );
-                                  }
-                                },
-                              ),
+                                child: MessageCard(
+                                  isSender: isSender,
+                                  haveNip: haveNip,
+                                  message: message.textMessage,
+                                  type: message.type,
+                                  timeSent: message.timeSent,
+                                  status: message.status,
+                                  repliedText: message.repliedMessage,
+                                  repliedMessageType:
+                                      message.repliedMessageType,
+                                  username: message.repliedTo,
+                                  onLeftSwipe: () {
+                                    if (isSender) {
+                                      onMessageSwipe(
+                                        message.textMessage,
+                                        isSender,
+                                        message.type,
+                                        ref,
+                                      );
+                                    }
+                                  },
+                                  onRightSwipe: () {
+                                    if (!isSender) {
+                                      onMessageSwipe(
+                                        message.textMessage,
+                                        isSender,
+                                        message.type,
+                                        ref,
+                                      );
+                                    }
+                                  },
+                                ),
+                              )
                             ],
                           );
                         },
@@ -463,11 +460,21 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
                         right: 20,
                         bottom: 70,
                         child: Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: CustomIconButton(
-                            onPressed: scrollToBottom,
-                            icon: Icons.keyboard_double_arrow_down,
-                            iconColor: context.theme.greyColor,
+                          padding: const EdgeInsets.all(2),
+                          child: Container(
+                            width: 30,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              color: context.theme
+                                  .receiverChatCardBg, // Couleur d'arrière-plan
+                              shape: BoxShape.circle, // Forme circulaire
+                            ),
+                            child: CustomIconButton(
+                              onPressed: scrollToBottom,
+                              icon: Icons.keyboard_double_arrow_down,
+                              iconColor:
+                                  context.theme.greyColor, // Couleur de l'icône
+                            ),
                           ),
                         ),
                       )

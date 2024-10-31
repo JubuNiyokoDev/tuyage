@@ -234,7 +234,7 @@ class ChatRepository {
     if (messages.isEmpty) return; // Vérifier s'il y a des messages
 
     // Utiliser le receiverId du premier message
-    print('Synchronisation des messages avec SQLite en cours...');
+    // print('Synchronisation des messages avec SQLite en cours...');
 
     final String receiverId = messages[0].receiverId;
 
@@ -243,11 +243,11 @@ class ChatRepository {
 
       if (!existsLocally) {
         await saveMessageLocally(message);
-        print('Message sauvegardé dans SQLite : ${message.messageId}');
+        // print('Message sauvegardé dans SQLite : ${message.messageId}');
       } else {
         await updateMessageStatusInSQLite(message.messageId, message.status);
-        print(
-            'Statut du message mis à jour dans SQLite : ${message.messageId}');
+        // print(
+        //     'Statut du message mis à jour dans SQLite : ${message.messageId}');
       }
     }
 
@@ -361,10 +361,10 @@ class ChatRepository {
               _getStringFromStatus(MessageStatus.read)) {
         await receiverDocRef
             .update({'status': _getStringFromStatus(MessageStatus.read)});
-        print('Changed status to read for receiver doc');
+        // print('Changed status to read for receiver doc');
       } else {
-        print(
-            'No change needed for receiver doc. Current status: ${receiverDocSnapshot.data()?['status']}');
+        // print(
+        //     'No change needed for receiver doc. Current status: ${receiverDocSnapshot.data()?['status']}');
       }
 
       // Vérification et mise à jour du statut pour l'expéditeur
@@ -374,10 +374,10 @@ class ChatRepository {
               _getStringFromStatus(MessageStatus.read)) {
         await senderDocRef
             .update({'status': _getStringFromStatus(MessageStatus.read)});
-        print('Changed status to read for sender doc');
+        // print('Changed status to read for sender doc');
       } else {
-        print(
-            'No change needed for sender doc. Current status: ${senderDocSnapshot.data()?['status']}');
+        // print(
+        //     'No change needed for sender doc. Current status: ${senderDocSnapshot.data()?['status']}');
       }
 
       // Mise à jour dans SQLite uniquement si nécessaire
@@ -417,11 +417,11 @@ class ChatRepository {
       if (senderDocSnapshot.exists &&
           senderDocSnapshot.data()?['status'] != _getStringFromStatus(status)) {
         await senderDocRef.update({'status': _getStringFromStatus(status)});
-        print(
-            'Changed status ${senderDocSnapshot.data()?['status']} for sender doc to ${_getStringFromStatus(status)}');
+        // print(
+        //     'Changed status ${senderDocSnapshot.data()?['status']} for sender doc to ${_getStringFromStatus(status)}');
       } else {
-        print(
-            'Not Changed status ${senderDocSnapshot.data()?['status']} for receiver doc to ${_getStringFromStatus(status)} et voici le document trouve ${senderDocSnapshot.exists}');
+        // print(
+        //     'Not Changed status ${senderDocSnapshot.data()?['status']} for receiver doc to ${_getStringFromStatus(status)} et voici le document trouve ${senderDocSnapshot.exists}');
       }
 
       // Vérifier et mettre à jour Firestore pour le destinataire
@@ -430,17 +430,17 @@ class ChatRepository {
           receiverDocSnapshot.data()?['status'] !=
               _getStringFromStatus(status)) {
         await receiverDocRef.update({'status': _getStringFromStatus(status)});
-        print(
-            'Changed status ${receiverDocSnapshot.data()?['status']} for receiver doc to ${_getStringFromStatus(status)}');
+        // print(
+        //     'Changed status ${receiverDocSnapshot.data()?['status']} for receiver doc to ${_getStringFromStatus(status)}');
       } else {
-        print(
-            'Not Changed status ${receiverDocSnapshot.data()?['status']} for receiver doc to ${_getStringFromStatus(status)} et voici le document trouve ${receiverDocSnapshot.exists}');
+        // print(
+        //     'Not Changed status ${receiverDocSnapshot.data()?['status']} for receiver doc to ${_getStringFromStatus(status)} et voici le document trouve ${receiverDocSnapshot.exists}');
       }
 
       // Mise à jour dans sqlite uniquement si nécessaire
       await updateMessageStatusInSQLite(messageId, status);
     } catch (e) {
-      print('Erreur lors de la mise à jour du statut du message : $e');
+      // print('Erreur lors de la mise à jour du statut du message : $e');
     }
   }
 
@@ -795,7 +795,7 @@ class ChatRepository {
       _getStringFromStatus(newStatus)
     ]);
 
-    print("Statut du message mis à jour dans SQLite : $messageId");
+    // print("Statut du message mis à jour dans SQLite : $messageId");
   }
 
   saveToMessageCollection({
