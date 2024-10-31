@@ -76,13 +76,7 @@ class ChatPage extends ConsumerWidget {
         );
   }
 
-  void scrollToBottom() {
-    scrollController.animateTo(
-      scrollController.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-    );
-  }
+  
 
 
   @override
