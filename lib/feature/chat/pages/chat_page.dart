@@ -371,7 +371,6 @@ class ChatPage extends ConsumerWidget {
                                   senderId: message.senderId,
                                 );
                           }
-
                           return Column(
                             children: [
                               if (index == 0) const YellowCard(),

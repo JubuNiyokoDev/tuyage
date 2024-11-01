@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -18,6 +19,9 @@ import 'package:tuyage/config/database_helper.dart';
 import 'package:tuyage/feature/auth/controller/auth_controller.dart';
 import 'package:uuid/uuid.dart';
 import 'package:tuyage/common/enum/message_type.dart' as myMessageType;
+
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:http/http.dart';
 
 final chatRepositoryProvider = Provider((ref) {
   return ChatRepository(
@@ -78,12 +82,6 @@ class ChatRepository {
       }
     });
   }
-
-  Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-  print('Message reçu en arrière-plan: ${message.messageId}');
-}
-
 
   Future<void> updateUserLastSeen(String uid) async {
     await firestore.collection('users').doc(uid).update({
@@ -229,7 +227,7 @@ class ChatRepository {
     return _messageController.stream; // Retourne le stream
   }
 
-// Fonction pour synchroniser les messages avec SQLite
+
   Future<void> _syncMessagesWithSQLite(List<MessageModel> messages) async {
     if (messages.isEmpty) return; // Vérifier s'il y a des messages
 
@@ -340,7 +338,7 @@ class ChatRepository {
           .collection('users')
           .doc(auth.currentUser!.uid)
           .collection('chats')
-          .doc(senderId) // Référence à la conversation avec l'expéditeur
+          .doc(senderId)
           .collection('messages')
           .doc(messageId);
 
@@ -349,44 +347,40 @@ class ChatRepository {
           .collection('users')
           .doc(senderId)
           .collection('chats')
-          .doc(auth.currentUser!
-              .uid) // Référence à la conversation avec le destinataire
+          .doc(auth.currentUser!.uid)
           .collection('messages')
           .doc(messageId);
 
-      // Vérification et mise à jour du statut pour le destinataire
+      // Mise à jour et suppression pour le destinataire
       final receiverDocSnapshot = await receiverDocRef.get();
       if (receiverDocSnapshot.exists &&
           receiverDocSnapshot.data()?['status'] !=
               _getStringFromStatus(MessageStatus.read)) {
         await receiverDocRef
             .update({'status': _getStringFromStatus(MessageStatus.read)});
-        // print('Changed status to read for receiver doc');
-      } else {
-        // print(
-        //     'No change needed for receiver doc. Current status: ${receiverDocSnapshot.data()?['status']}');
+        await receiverDocRef
+            .delete(); // Suppression dans Firestore pour le destinataire
       }
 
-      // Vérification et mise à jour du statut pour l'expéditeur
+      // Mise à jour et suppression pour l'expéditeur
       final senderDocSnapshot = await senderDocRef.get();
       if (senderDocSnapshot.exists &&
           senderDocSnapshot.data()?['status'] !=
               _getStringFromStatus(MessageStatus.read)) {
         await senderDocRef
             .update({'status': _getStringFromStatus(MessageStatus.read)});
-        // print('Changed status to read for sender doc');
-      } else {
-        // print(
-        //     'No change needed for sender doc. Current status: ${senderDocSnapshot.data()?['status']}');
+        await senderDocRef
+            .delete(); // Suppression dans Firestore pour l'expéditeur
       }
 
-      // Mise à jour dans SQLite uniquement si nécessaire
+      // Mise à jour du statut dans SQLite
       await updateMessageStatusInSQLite(
         messageId,
         MessageStatus.read,
       );
     } catch (e) {
-      print('Erreur lors de la mise à jour du statut du message : $e');
+      print(
+          'Erreur lors de la mise à jour et de la suppression du message : $e');
     }
   }
 
@@ -459,103 +453,104 @@ class ChatRepository {
   }
 
   Future<void> syncMessages(String receiverId) async {
-    try {
-      final lastSyncTime = await DatabaseHelper().getLastSyncTime(receiverId) ??
-          DateTime.fromMillisecondsSinceEpoch(0);
+  try {
+    // Obtenir le dernier timestamp de synchronisation en millisecondes
+    final lastSyncTime = await DatabaseHelper().getLastSyncTime(receiverId) ?? DateTime.fromMillisecondsSinceEpoch(0);
 
-      // Récupération des messages de Firestore
-      final firestoreMessagesSnapshot = await firestore
-          .collection('users')
-          .doc(auth.currentUser!.uid)
-          .collection('chats')
-          .doc(receiverId)
-          .collection('messages')
-          .where('timeSent', isGreaterThan: lastSyncTime.millisecondsSinceEpoch)
-          .get();
+    print("avant syncMessage on ${lastSyncTime.millisecondsSinceEpoch}");
 
-      if (firestoreMessagesSnapshot.docs.isEmpty) {
-        print('Aucun message trouvé dans Firestore pour ce destinataire.');
-        return;
-      }
+    // Récupération des messages depuis Firestore avec un filtre sur le timestamp
+    final firestoreMessagesSnapshot = await firestore
+        .collection('users')
+        .doc(auth.currentUser!.uid)
+        .collection('chats')
+        .doc(receiverId)
+        .collection('messages')
+        .where('timeSent', isGreaterThan:  lastSyncTime.millisecondsSinceEpoch)
+        .get();
 
-      final firestoreMessageIds =
-          firestoreMessagesSnapshot.docs.map((doc) => doc.id).toSet();
+    if (firestoreMessagesSnapshot.docs.isEmpty) {
+      print('Aucun message trouvé dans Firestore pour ce destinataire.');
+      return;
+    }
 
-      // Récupération des messages locaux
-      final localMessages = await getLocalMessages(auth.currentUser!.uid);
+    final firestoreMessageIds = firestoreMessagesSnapshot.docs.map((doc) => doc.id).toSet();
 
-      if (localMessages.isEmpty) {
-        print('Aucun message trouvé localement.');
-      }
+    // Récupération des messages locaux
+    final localMessages = await getLocalMessages(auth.currentUser!.uid);
 
-      // Récupération des données de l'utilisateur actuel (expéditeur)
-      final user = FirebaseAuth.instance.currentUser;
-      final senderData = await getSenderData(user!.uid);
+    if (localMessages.isEmpty) {
+      print('Aucun message trouvé localement.');
+    }
 
-      // Récupération des données du destinataire
-      final receiverData = await getReceiverData(receiverId);
+    // Récupération des données de l'utilisateur actuel (expéditeur)
+    final user = FirebaseAuth.instance.currentUser;
+    final senderData = await getSenderData(user!.uid);
 
-      // Synchronisation des messages
-      for (var localMessage in localMessages) {
-        if (localMessage.receiverId == receiverId) {
-          // Si le message n'existe pas dans Firestore, l'envoyer
-          if (!firestoreMessageIds.contains(localMessage.messageId)) {
-            // Sauvegarde du message dans Firestore
-            await saveToMessageCollection(
+    // Récupération des données du destinataire
+    final receiverData = await getReceiverData(receiverId);
+
+    // Synchronisation des messages locaux
+    for (var localMessage in localMessages) {
+      if (localMessage.receiverId == receiverId) {
+        // Vérifie si le message est absent de Firestore, sinon l'ajoute
+        if (!firestoreMessageIds.contains(localMessage.messageId)) {
+          await saveToMessageCollection(
+            receiverId: receiverId,
+            textMessage: localMessage.textMessage,
+            timeSent: localMessage.timeSent,
+            textMessageId: localMessage.messageId,
+            senderUsername: senderData.username,
+            receiverUsername: receiverData.username,
+            messageType: localMessage.type,
+            messageReply: null,
+            isGroupChat: false,
+          );
+
+          // Vérifie l'existence du message sauvegardé dans Firestore
+          final messageRef = firestore
+              .collection('users')
+              .doc(auth.currentUser!.uid)
+              .collection('chats')
+              .doc(receiverId)
+              .collection('messages')
+              .doc(localMessage.messageId);
+
+          if (await messageRef.get().then((doc) => doc.exists)) {
+            // Mise à jour du statut dans SQLite et Firestore
+            await updateMessageStatusInSQLite(localMessage.messageId, MessageStatus.sent);
+            await updateMessageStatus(
+              messageId: localMessage.messageId,
+              status: MessageStatus.sent,
               receiverId: receiverId,
-              textMessage: localMessage.textMessage,
-              timeSent: localMessage.timeSent,
-              textMessageId: localMessage.messageId,
-              senderUsername: senderData.username,
-              receiverUsername: receiverData.username,
-              messageType: localMessage.type,
-              messageReply: null,
-              isGroupChat: false,
             );
 
-            // Vérifier si le message a été correctement sauvegardé dans Firestore
-            final messageRef = firestore
-                .collection('users')
-                .doc(auth.currentUser!.uid)
-                .collection('chats')
-                .doc(receiverId)
-                .collection('messages')
-                .doc(localMessage.messageId);
-
-            if (await messageRef.get().then((doc) => doc.exists)) {
-              // Mise à jour du statut du message dans SQLite et Firestore
-              await updateMessageStatusInSQLite(
-                  localMessage.messageId, MessageStatus.sent);
-              await updateMessageStatus(
-                messageId: localMessage.messageId,
-                status: MessageStatus.sent,
-                receiverId: receiverId,
-              );
-
-              // Mettre à jour le dernier message pour l'expéditeur et le destinataire
-              await saveAsLastMessage(
-                senderUserData: senderData,
-                receiverUserData: receiverData,
-                lastMessage: localMessage.textMessage,
-                timeSent: localMessage.timeSent,
-                receiverId: receiverId,
-                isGroupChat: false, // Adapte selon le contexte
-              );
-            } else {
-              print(
-                  'Erreur lors de l\'enregistrement du message dans Firestore');
-            }
+            // Mettre à jour le dernier message pour l'expéditeur et le destinataire
+            await saveAsLastMessage(
+              senderUserData: senderData,
+              receiverUserData: receiverData,
+              lastMessage: localMessage.textMessage,
+              timeSent: localMessage.timeSent,
+              receiverId: receiverId,
+              isGroupChat: false,
+            );
+          } else {
+            print('Erreur lors de l\'enregistrement du message dans Firestore');
           }
         }
       }
-
-      await DatabaseHelper().updateLastSyncTime(receiverId, DateTime.now());
-
-      print("Synchronisation des messages terminée.");
-    } catch (e) {
-      print('Erreur lors de la synchronisation des messages : $e');
     }
+
+    // Mettre à jour le dernier temps de synchronisation avec l'heure actuelle
+    await DatabaseHelper().updateLastSyncTime(receiverId, DateTime.now());
+    print("apres syncMessage on ${lastSyncTime.millisecondsSinceEpoch}");
+
+    print("Synchronisation des messages terminée.");
+  } catch (e) {
+    print('Erreur lors de la synchronisation des messages : $e');
   }
+}
+
 
   Future<UserModel> getSenderData(String senderId) async {
     try {
@@ -643,14 +638,15 @@ class ChatRepository {
       bool isConnected = await isConnectedToNetwork();
       if (isConnected) {
         await _sendMessageToFirestore(
-            receiverId,
-            senderData,
-            textMessage,
-            timeSent,
-            textMessageId,
-            messageReply,
-            isGroupChat,
-            receiverData); // Passer receiverData ici
+          receiverId,
+          senderData,
+          textMessage,
+          timeSent,
+          textMessageId,
+          messageReply,
+          isGroupChat,
+          receiverData,
+        ); // Passer receiverData ici
         await _syncPendingMessages(
             receiverId, receiverData, isGroupChat); // Passer receiverData ici
       } else {
@@ -690,7 +686,7 @@ class ChatRepository {
     String textMessage,
     DateTime timeSent,
     MessageReply? messageReply,
-    UserModel? receiverData, // Recevoir receiverData ici
+    UserModel? receiverData,
   ) {
     return MessageModel(
       senderId: senderData.uid,
@@ -730,7 +726,7 @@ class ChatRepository {
     String messageId,
     MessageReply? messageReply,
     bool isGroupChat,
-    UserModel? receiverData, // Passer receiverData ici
+    UserModel? receiverData, 
   ) async {
     await saveToMessageCollection(
       receiverId: receiverId,
@@ -739,7 +735,7 @@ class ChatRepository {
       textMessageId: messageId,
       senderUsername: senderData.username,
       receiverUsername: receiverData?.username ??
-          'Utilisateur inconnu', // Utiliser receiverData ici
+          'Utilisateur inconnu', 
       messageType: myMessageType.MessageType.text,
       messageReply: messageReply,
       isGroupChat: isGroupChat,
