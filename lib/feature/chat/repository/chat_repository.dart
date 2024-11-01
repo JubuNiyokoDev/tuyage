@@ -17,8 +17,6 @@ import 'package:tuyage/feature/auth/controller/auth_controller.dart';
 import 'package:uuid/uuid.dart';
 import 'package:tuyage/common/enum/message_type.dart' as myMessageType;
 
-import 'package:http/http.dart';
-
 final chatRepositoryProvider = Provider((ref) {
   return ChatRepository(
     firestore: FirebaseFirestore.instance,
@@ -68,12 +66,12 @@ class ChatRepository {
         if (uid != null) {
           await updateUserActiveStatus(true);
           await updateUserLastSeen(uid);
+          await syncAllMessages();
+          UserModel? receiverData =
+              await getReceiverData(uid); // Remplace cette ligne par ta logique
 
-          // Appeler la synchronisation des messages ici
-          var pendingMessages = await getLocalMessages(auth.currentUser!.uid);
-          if (pendingMessages.isNotEmpty) {
-            await syncAllMessages();
-          }
+          // Appeler syncPendingMessages avec les bons paramètres
+          await syncPendingMessages(uid, receiverData, false);
         }
       }
     });
@@ -647,8 +645,6 @@ class ChatRepository {
           isGroupChat,
           receiverData,
         ); // Passer receiverData ici
-        await _syncPendingMessages(
-            receiverId, receiverData, isGroupChat); // Passer receiverData ici
       } else {
         print(
             "Message sauvegardé localement. Il sera envoyé lorsque la connexion sera rétablie.");
@@ -756,7 +752,7 @@ class ChatRepository {
     await updateMessageStatusInSQLite(messageId, MessageStatus.sent);
   }
 
-  Future<void> _syncPendingMessages(
+  Future<void> syncPendingMessages(
       String receiverId, UserModel? receiverData, bool isGroupChat) async {
     List<MessageModel> pendingMessages = await getPendingMessagesFromSQLite();
     for (MessageModel pendingMessage in pendingMessages) {
@@ -766,8 +762,7 @@ class ChatRepository {
         timeSent: pendingMessage.timeSent,
         textMessageId: pendingMessage.messageId,
         senderUsername: pendingMessage.senderId,
-        receiverUsername: receiverData?.username ??
-            'Utilisateur inconnu', // Utiliser receiverData ici
+        receiverUsername: receiverData?.username ?? 'Utilisateur inconnu',
         messageType: pendingMessage.type,
         messageReply: null,
         isGroupChat: isGroupChat,

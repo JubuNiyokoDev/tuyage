@@ -9,6 +9,7 @@ import 'package:tuyage/common/enum/message_status.dart';
 import 'package:tuyage/common/models/group.dart';
 import 'package:tuyage/common/models/last_message_model.dart';
 import 'package:tuyage/common/models/message_model.dart';
+import 'package:tuyage/common/models/user_model.dart';
 import 'package:tuyage/common/providers/message_reply_provider.dart';
 import 'package:tuyage/feature/auth/controller/auth_controller.dart';
 import 'package:tuyage/feature/chat/repository/chat_repository.dart';
@@ -62,6 +63,10 @@ class ChatController {
         // Relance les messages en attente si l'utilisateur est reconnecté
         // resendPendingMessages(context, isGroupChat);
         ref.read(chatRepositoryProvider).syncAllMessages();
+         UserModel? receiverData = await chatRepository.getReceiverData(uid);
+
+        // Appeler _syncPendingMessages avec les bons paramètres
+        await chatRepository.syncPendingMessages(uid, receiverData, isGroupChat);
       } else {
         // Mise à jour pour passer "offline" après un délai
         Timer(const Duration(minutes: 5), () {
@@ -74,57 +79,7 @@ class ChatController {
     }
   }
 
-  // Future<void> resendPendingMessages(
-  //     BuildContext context, bool isGroupChat) async {
-  //   List<MessageModel> pendingMessages = await retrievePendingMessages();
-
-  //   for (var message in pendingMessages) {
-  //     if (message.type == myMessageType.MessageType.text) {
-  //       await sendTextMessage(
-  //         context: context,
-  //         textMessage: message.textMessage,
-  //         receiverId: message.receiverId,
-  //         isGroupChat: isGroupChat,
-  //       );
-  //     } else {
-  //       await sendFileMessage(
-  //         context: context,
-  //         file: message.textMessage,
-  //         receiverId: message.receiverId,
-  //         messageType: message.type,
-  //         isGroupChat: isGroupChat,
-  //       );
-  //     }
-  //   }
-
-  //   await clearPendingMessages();
-  // }
-
-  // Future<List<MessageModel>> retrievePendingMessages() async {
-  //   var box = await Hive.openBox('offline_messages');
-  //   return box.values.map((messageMap) {
-  //     return MessageModel(
-  //       senderId: messageMap['senderId'],
-  //       receiverId: messageMap['receiverId'],
-  //       textMessage: messageMap['textMessage'],
-  //       type: myMessageType.MessageType.values
-  //           .firstWhere((e) => e.toString() == messageMap['type']),
-  //       timeSent: DateTime.parse(messageMap['timeSent']),
-  //       messageId: messageMap['messageId'],
-  //       status: MessageStatus.values
-  //           .firstWhere((e) => e.toString() == messageMap['status']),
-  //       repliedMessage: messageMap['repliedMessage'],
-  //       repliedTo: messageMap['repliedTo'],
-  //       repliedMessageType: myMessageType.MessageType.values.firstWhere(
-  //           (e) => e.toString() == messageMap['repliedMessageType']),
-  //     );
-  //   }).toList();
-  // }
-
-  // Future<void> clearPendingMessages() async {
-  //   var box = await Hive.openBox('offline_messages');
-  //   await box.clear();
-  // }
+ 
 
   Future<void> sendFileMessage({
     required BuildContext context,
