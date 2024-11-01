@@ -59,7 +59,7 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE sync_metadata (
         receiver_id TEXT PRIMARY KEY,
-        last_sync_time TEXT
+        last_sync_time INTEGER
       )
     ''');
   }
@@ -95,39 +95,34 @@ class DatabaseHelper {
   }
 
   // Récupérer l'horodatage du dernier message synchronisé pour un destinataire
-  Future<DateTime?> getLastSyncTime(String receiverId) async {
-    final db = await database;
+ Future<DateTime?> getLastSyncTime(String receiverId) async {
+  final db = await database;
+  final result = await db.query(
+    'sync_metadata',
+    columns: ['last_sync_time'],
+    where: 'receiver_id = ?',
+    whereArgs: [receiverId],
+  );
 
-    // Récupérer l'horodatage de la dernière synchronisation pour ce destinataire
-    final result = await db.query(
-      'sync_metadata',
-      columns: ['last_sync_time'],
-      where: 'receiver_id = ?',
-      whereArgs: [receiverId],
-    );
-
-    if (result.isNotEmpty) {
-      // Convertir l'horodatage en DateTime
-      return DateTime.parse(result.first['last_sync_time'] as String);
-    } else {
-      return null; // Aucun horodatage trouvé pour ce destinataire
-    }
+  if (result.isNotEmpty) {
+    final lastSyncTimeMillis = result.first['last_sync_time'] as int;
+    return DateTime.fromMillisecondsSinceEpoch(lastSyncTimeMillis);
+  } else {
+    return null;
   }
+}
 
-  // Mettre à jour l'horodatage du dernier message synchronisé pour un destinataire
-  Future<void> updateLastSyncTime(
-      String receiverId, DateTime lastSyncTime) async {
-    final db = await database;
 
-    // Insérer ou mettre à jour l'horodatage du dernier message synchronisé
-    await db.insert(
-      'sync_metadata',
-      {
-        'receiver_id': receiverId,
-        'last_sync_time': lastSyncTime.toIso8601String(),
-      },
-      conflictAlgorithm:
-          ConflictAlgorithm.replace, // Remplace si le destinataire existe déjà
-    );
-  }
+ Future<void> updateLastSyncTime(String receiverId, DateTime lastSyncTime) async {
+  final db = await database;
+  await db.insert(
+    'sync_metadata',
+    {
+      'receiver_id': receiverId,
+      'last_sync_time': lastSyncTime.millisecondsSinceEpoch,
+    },
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+}
+
 }
