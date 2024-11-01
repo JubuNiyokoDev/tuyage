@@ -20,7 +20,6 @@ import 'package:tuyage/feature/auth/controller/auth_controller.dart';
 import 'package:uuid/uuid.dart';
 import 'package:tuyage/common/enum/message_type.dart' as myMessageType;
 
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:http/http.dart';
 
 final chatRepositoryProvider = Provider((ref) {
@@ -160,99 +159,93 @@ class ChatRepository {
       return false;
     }
   }
-
-  Stream<List<MessageModel>> getAllOneToOneMessage(String receiverId) {
-    // Émet immédiatement les messages locaux
-    getLocalMessages(receiverId).then((localMessages) {
-      if (localMessages.isNotEmpty) {
-        _messageController.add(localMessages); // Émettre les messages locaux
-      } else {
-        print('Aucun message local pour le receiverId : $receiverId');
-        _messageController
-            .add([]); // Émet une liste vide pour éviter le chargement infini
-      }
-    });
-
-    // Vérification de la connexion à Internet
-    isConnectedToNetwork().then((isConnected) {
-      if (!isConnected) {
-        print('Pas de connexion à Internet. Émission des messages locaux.');
-        // On ne sort pas ici, on continue d'écouter les changements locaux
-      } else {
-        // Écoute des nouveaux messages depuis Firestore
-        firestore
-            .collection('users')
-            .doc(auth.currentUser!.uid)
-            .collection('chats')
-            .doc(receiverId)
-            .collection('messages')
-            .orderBy('timeSent', descending: false)
-            .snapshots()
-            .listen((snapshot) async {
-          if (snapshot.docs.isNotEmpty) {
-            final messages = snapshot.docs.map((doc) {
-              var data = doc.data();
-              return MessageModel.fromMap({
-                'messageId': doc.id,
-                'senderId': data['senderId'],
-                'receiverId': data['receiverId'],
-                'textMessage': data['textMessage'],
-                'type': data['type'],
-                'timeSent': data['timeSent'],
-                'status': data['status'],
-                'repliedMessage': data['repliedMessage'] ?? '',
-                'repliedTo': data['repliedTo'] ?? '',
-                'repliedMessageType': data['repliedMessageType'] ?? '',
-              });
-            }).toList();
-
-            // Synchronisez avec SQLite
-            await _syncMessagesWithSQLite(messages);
-
-            // Émettre les messages synchronisés
-            print('Messages Firestore ajoutés dans le StreamController.');
-            _messageController.add(messages);
-          } else {
-            print('Aucun nouveau message depuis Firestore pour $receiverId');
-            // Ici, on pourrait émettre des messages locaux si souhaité
-          }
-        }, onError: (error) {
-          print('Erreur de synchronisation Firestore : $error');
-          _messageController
-              .addError(error); // Capturez les erreurs dans le StreamController
-        });
-      }
-    });
-
-    return _messageController.stream; // Retourne le stream
-  }
-
-
-  Future<void> _syncMessagesWithSQLite(List<MessageModel> messages) async {
-    if (messages.isEmpty) return; // Vérifier s'il y a des messages
-
-    // Utiliser le receiverId du premier message
-    // print('Synchronisation des messages avec SQLite en cours...');
-
-    final String receiverId = messages[0].receiverId;
-
-    for (var message in messages) {
-      final existsLocally = await messageExistsLocally(message.messageId);
-
-      if (!existsLocally) {
-        await saveMessageLocally(message);
-        // print('Message sauvegardé dans SQLite : ${message.messageId}');
-      } else {
-        await updateMessageStatusInSQLite(message.messageId, message.status);
-        // print(
-        //     'Statut du message mis à jour dans SQLite : ${message.messageId}');
-      }
+Stream<List<MessageModel>> getAllOneToOneMessage(String receiverId) {
+  // Émet immédiatement les messages locaux
+  getLocalMessages(receiverId).then((localMessages) {
+    if (localMessages.isNotEmpty) {
+      _messageController.add(localMessages); // Émettre les messages locaux
+    } else {
+      print('Aucun message local pour le receiverId : $receiverId');
+      _messageController.add([]); // Émet une liste vide pour éviter le chargement infini
     }
+  });
 
-    // Émettre la liste mise à jour des messages après la synchronisation
-    final updatedMessages = await getLocalMessages(receiverId);
-    _messageController.add(updatedMessages);
+  // Vérification de la connexion à Internet
+  isConnectedToNetwork().then((isConnected) async {
+    if (!isConnected) {
+      print('Pas de connexion à Internet. Émission des messages locaux.');
+    } else {
+      // Récupérer le dernier temps de synchronisation
+      final lastSyncTime = await DatabaseHelper().getLastSyncTime(receiverId) ?? DateTime.fromMillisecondsSinceEpoch(0);
+      
+      // Écoute des nouveaux messages depuis Firestore à partir de lastSyncTime
+      firestore
+          .collection('users')
+          .doc(auth.currentUser!.uid)
+          .collection('chats')
+          .doc(receiverId)
+          .collection('messages')
+          .where('timeSent', isGreaterThan: lastSyncTime.millisecondsSinceEpoch)
+          .orderBy('timeSent', descending: false)
+          .snapshots()
+          .listen((snapshot) async {
+        if (snapshot.docs.isNotEmpty) {
+          final messages = snapshot.docs.map((doc) {
+            var data = doc.data();
+            return MessageModel.fromMap({
+              'messageId': doc.id,
+              'senderId': data['senderId'],
+              'receiverId': data['receiverId'],
+              'textMessage': data['textMessage'],
+              'type': data['type'],
+              'timeSent': data['timeSent'],
+              'status': data['status'],
+              'repliedMessage': data['repliedMessage'] ?? '',
+              'repliedTo': data['repliedTo'] ?? '',
+              'repliedMessageType': data['repliedMessageType'] ?? '',
+            });
+          }).toList();
+
+          // Synchronisation avec SQLite
+          await _syncMessagesWithSQLite(messages);
+
+          // Mettre à jour le dernier temps de synchronisation
+          await DatabaseHelper().updateLastSyncTime(receiverId, DateTime.now());
+
+          // Émettre les messages synchronisés
+          print('Messages Firestore ajoutés dans le StreamController.');
+        } else {
+          print('Aucun nouveau message depuis Firestore pour $receiverId');
+        }
+      }, onError: (error) {
+        print('Erreur de synchronisation Firestore : $error');
+        _messageController.addError(error); // Capturez les erreurs dans le StreamController
+      });
+    }
+  });
+
+  return _messageController.stream; // Retourne le stream
+}
+
+Future<void> _syncMessagesWithSQLite(List<MessageModel> messages) async {
+  if (messages.isEmpty) return; // Vérifier s'il y a des messages
+
+  final String receiverId = messages[0].receiverId;
+
+  for (var message in messages) {
+    final existsLocally = await messageExistsLocally(message.messageId);
+
+    if (!existsLocally) {
+      await saveMessageLocally(message);
+    } else {
+      await updateMessageStatusInSQLite(message.messageId, message.status);
+    }
   }
+
+  // Émettre la liste mise à jour des messages après la synchronisation
+  final updatedMessages = await getLocalMessages(receiverId);
+  _messageController.add(updatedMessages);
+}
 
   Stream<List<MessageModel>> getAllOneToOneGroupMessages(String groupId) {
     return firestore
