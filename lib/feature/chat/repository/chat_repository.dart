@@ -17,6 +17,8 @@ import 'package:tuyage/feature/auth/controller/auth_controller.dart';
 import 'package:uuid/uuid.dart';
 import 'package:tuyage/common/enum/message_type.dart' as myMessageType;
 
+import 'package:http/http.dart';
+
 final chatRepositoryProvider = Provider((ref) {
   return ChatRepository(
     firestore: FirebaseFirestore.instance,
@@ -168,18 +170,24 @@ class ChatRepository {
     });
 
     // Vérification de la connexion à Internet
-    isConnectedToNetwork().then((isConnected) {
+    isConnectedToNetwork().then((isConnected) async {
       if (!isConnected) {
         print('Pas de connexion à Internet. Émission des messages locaux.');
-        // On ne sort pas ici, on continue d'écouter les changements locaux
       } else {
-        // Écoute des nouveaux messages depuis Firestore
+        // Récupérer le dernier temps de synchronisation
+        final lastSyncTime =
+            await DatabaseHelper().getLastSyncTime(receiverId) ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+
+        // Écoute des nouveaux messages depuis Firestore à partir de lastSyncTime
         firestore
             .collection('users')
             .doc(auth.currentUser!.uid)
             .collection('chats')
             .doc(receiverId)
             .collection('messages')
+            .where('timeSent',
+                isGreaterThan: lastSyncTime.millisecondsSinceEpoch)
             .orderBy('timeSent', descending: false)
             .snapshots()
             .listen((snapshot) async {
@@ -200,15 +208,17 @@ class ChatRepository {
               });
             }).toList();
 
-            // Synchronisez avec SQLite
+            // Synchronisation avec SQLite
             await _syncMessagesWithSQLite(messages);
+
+            // Mettre à jour le dernier temps de synchronisation
+            await DatabaseHelper()
+                .updateLastSyncTime(receiverId, DateTime.now());
 
             // Émettre les messages synchronisés
             print('Messages Firestore ajoutés dans le StreamController.');
-            _messageController.add(messages);
           } else {
             print('Aucun nouveau message depuis Firestore pour $receiverId');
-            // Ici, on pourrait émettre des messages locaux si souhaité
           }
         }, onError: (error) {
           print('Erreur de synchronisation Firestore : $error');
@@ -224,9 +234,6 @@ class ChatRepository {
   Future<void> _syncMessagesWithSQLite(List<MessageModel> messages) async {
     if (messages.isEmpty) return; // Vérifier s'il y a des messages
 
-    // Utiliser le receiverId du premier message
-    // print('Synchronisation des messages avec SQLite en cours...');
-
     final String receiverId = messages[0].receiverId;
 
     for (var message in messages) {
@@ -234,11 +241,8 @@ class ChatRepository {
 
       if (!existsLocally) {
         await saveMessageLocally(message);
-        // print('Message sauvegardé dans SQLite : ${message.messageId}');
       } else {
         await updateMessageStatusInSQLite(message.messageId, message.status);
-        // print(
-        //     'Statut du message mis à jour dans SQLite : ${message.messageId}');
       }
     }
 
